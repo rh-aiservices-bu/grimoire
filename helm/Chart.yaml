@@ -1,0 +1,14 @@
+apiVersion: v2
+name: prompt-experimentation-tool
+description: A Helm chart for the Prompt Experimentation Tool
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - ai
+  - llama
+  - prompts
+  - experimentation
+maintainers:
+  - name: AI Team
+home: https://github.com/your-org/prompt-experimentation-tool
