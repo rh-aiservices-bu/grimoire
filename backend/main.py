@@ -106,7 +106,7 @@ async def get_project(project_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Project not found")
     return project
 
-@app.put("/api/projects/{project_id}", response_model=ProjectResponse)
+@app.put("/api/projects/{project_id}", response_model=ProjectResponse, tags=["Projects"])
 async def update_project(
     project_id: int, 
     project_update: ProjectUpdate, 
@@ -128,7 +128,7 @@ async def update_project(
     db.refresh(project)
     return project
 
-@app.delete("/api/projects/{project_id}")
+@app.delete("/api/projects/{project_id}", tags=["Projects"])
 async def delete_project(project_id: int, db: Session = Depends(get_db)):
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
@@ -144,7 +144,7 @@ async def delete_project(project_id: int, db: Session = Depends(get_db)):
     return {"message": "Project deleted successfully"}
 
 # Prompt history endpoints
-@app.get("/api/projects/{project_id}/history", response_model=List[PromptHistoryResponse])
+@app.get("/api/projects/{project_id}/history", response_model=List[PromptHistoryResponse], tags=["History"])
 async def get_prompt_history(project_id: int, db: Session = Depends(get_db)):
     # Verify project exists
     project = db.query(Project).filter(Project.id == project_id).first()
@@ -165,7 +165,7 @@ async def get_prompt_history(project_id: int, db: Session = Depends(get_db)):
     
     return history
 
-@app.post("/api/projects/{project_id}/history", response_model=PromptHistoryResponse)
+@app.post("/api/projects/{project_id}/history", response_model=PromptHistoryResponse, tags=["History"])
 async def save_prompt_history(
     project_id: int, 
     history: PromptHistoryCreate, 
@@ -200,7 +200,7 @@ async def save_prompt_history(
     
     return db_history
 
-@app.put("/api/projects/{project_id}/history/{history_id}", response_model=PromptHistoryResponse)
+@app.put("/api/projects/{project_id}/history/{history_id}", response_model=PromptHistoryResponse, tags=["History"])
 async def update_prompt_history(
     project_id: int,
     history_id: int,
@@ -461,9 +461,53 @@ async def get_latest_prompt(
         variables=variables
     )
 
-@app.get("/")
+@app.get("/", tags=["Documentation"])
 async def root():
-    return {"message": "Prompt Experimentation Tool API"}
+    """
+    Welcome to the Prompt Experimentation Tool API!
+    
+    This API provides comprehensive prompt experimentation capabilities with Llamastack models.
+    
+    ## 🚀 Quick Links
+    
+    - **Interactive API Documentation**: [/docs](/docs) - Swagger UI with live testing
+    - **Alternative Documentation**: [/redoc](/redoc) - ReDoc interface
+    - **OpenAPI Schema**: [/openapi.json](/openapi.json) - Raw OpenAPI specification
+    
+    ## 📋 Most Used Endpoints
+    
+    - `GET /api/projects-models` - List all projects and models
+    - `GET /prompt/{project_name}/{provider_id}` - Get latest prompt configuration
+    - `POST /api/projects` - Create a new project
+    - `POST /api/projects/{id}/generate` - Generate responses (streaming)
+    
+    ## 💡 External Integration Examples
+    
+    ```bash
+    # Get all available projects and models
+    curl http://localhost:3001/api/projects-models
+    
+    # Get latest prompt for specific project
+    curl http://localhost:3001/prompt/newsummary/llama32-full
+    ```
+    """
+    return {
+        "message": "Prompt Experimentation Tool API",
+        "version": "1.0.0",
+        "documentation": {
+            "swagger_ui": "/docs",
+            "redoc": "/redoc", 
+            "openapi_json": "/openapi.json"
+        },
+        "external_endpoints": {
+            "projects_and_models": "/api/projects-models",
+            "latest_prompt": "/prompt/{project_name}/{provider_id}"
+        },
+        "examples": {
+            "get_projects": "curl http://localhost:3001/api/projects-models",
+            "get_prompt": "curl http://localhost:3001/prompt/newsummary/llama32-full"
+        }
+    }
 
 if __name__ == "__main__":
     import uvicorn

@@ -24,6 +24,7 @@ import { api } from '../api';
 import { HistoryLog } from './HistoryLog';
 import { ProjectEditModal } from './ProjectEditModal';
 import { DeleteProjectModal } from './DeleteProjectModal';
+import { ApiDocumentationModal } from './ApiDocumentationModal';
 
 interface PromptExperimentViewProps {
   project: Project;
@@ -60,6 +61,7 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
   const [history, setHistory] = useState<PromptHistory[]>([]);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isApiDocModalOpen, setIsApiDocModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [currentProject, setCurrentProject] = useState<Project>(project);
 
@@ -187,8 +189,13 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
   };
 
   return (
-    <Page>
-      <PageSection>
+    <Page style={{ width: '100%', maxWidth: '100%' }}>
+      <PageSection style={{ 
+        paddingLeft: '1rem', 
+        paddingRight: '1rem',
+        maxWidth: '100%',
+        width: '100%'
+      }}>
         <Split hasGutter>
           <SplitItem isFilled>
             <Title headingLevel="h1" size="2xl">{currentProject.name}</Title>
@@ -206,12 +213,33 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
               Delete Project
             </Button>
           </SplitItem>
+          <SplitItem>
+            <Button variant="tertiary" onClick={() => setIsApiDocModalOpen(true)}>
+              API Docs
+            </Button>
+          </SplitItem>
         </Split>
       </PageSection>
 
-      <PageSection>
-        <Grid hasGutter>
-          <GridItem span={3}>
+      <PageSection style={{ 
+        paddingLeft: '1rem', 
+        paddingRight: '1rem',
+        maxWidth: '100%',
+        width: '100%'
+      }}>
+        <div style={{ 
+          display: 'flex', 
+          gap: '1rem', 
+          width: '100%',
+          minHeight: 'calc(100vh - 200px)',
+          flexWrap: 'nowrap'
+        }}>
+          {/* Projects Sidebar */}
+          <div style={{ 
+            flex: '0 0 280px',
+            minWidth: '280px',
+            maxWidth: '300px'
+          }}>
             <Card>
               <CardTitle>
                 <Split hasGutter>
@@ -229,27 +257,33 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
               </CardTitle>
               <CardBody>
                 {allProjects.length > 0 ? (
-                  <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                  <div style={{ maxHeight: '350px', overflowY: 'auto' }}>
                     {allProjects.map((proj) => (
                       <div
                         key={proj.id}
                         style={{
-                          padding: '0.75rem',
-                          margin: '0.5rem 0',
-                          borderRadius: '6px',
+                          padding: '0.5rem',
+                          margin: '0.25rem 0',
+                          borderRadius: '4px',
                           cursor: 'pointer',
-                          backgroundColor: proj.id === currentProject.id ? 'var(--pf-global--palette--blue-50)' : 'var(--pf-global--BackgroundColor--100)',
+                          backgroundColor: proj.id === currentProject.id ? 'var(--pf-global--palette--blue-50)' : 'transparent',
                           border: proj.id === currentProject.id ? '2px solid var(--pf-global--palette--blue-300)' : '1px solid var(--pf-global--BorderColor--100)',
-                          boxShadow: proj.id === currentProject.id ? '0 2px 8px rgba(0, 0, 0, 0.1)' : 'none',
-                          transform: proj.id === currentProject.id ? 'translateY(-1px)' : 'none',
+                          boxShadow: proj.id === currentProject.id ? '0 1px 4px rgba(0, 0, 0, 0.1)' : 'none',
                           transition: 'all 0.2s ease-in-out',
                         }}
                         onClick={() => onProjectSelect?.(proj)}
                       >
-                        <div style={{ fontWeight: proj.id === currentProject.id ? 'bold' : 'normal' }}>
+                        <div style={{ 
+                          fontWeight: proj.id === currentProject.id ? 'bold' : 'normal',
+                          fontSize: '0.875rem',
+                          marginBottom: '0.125rem'
+                        }}>
                           {proj.name}
                         </div>
-                        <small style={{ color: 'var(--pf-global--Color--200)' }}>
+                        <small style={{ 
+                          color: 'var(--pf-global--Color--200)',
+                          fontSize: '0.75rem'
+                        }}>
                           {proj.provider_id}
                         </small>
                       </div>
@@ -260,11 +294,36 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
                     No other projects
                   </p>
                 )}
+                
+                {/* API Access Info */}
+                <div style={{ 
+                  marginTop: '0.75rem', 
+                  padding: '0.5rem', 
+                  backgroundColor: 'var(--pf-global--palette--blue-50)', 
+                  border: '1px solid var(--pf-global--palette--blue-200)', 
+                  borderRadius: '4px' 
+                }}>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 'bold', marginBottom: '0.25rem' }}>
+                    🔗 API Access
+                  </div>
+                  <Button 
+                    variant="link" 
+                    onClick={() => setIsApiDocModalOpen(true)}
+                    style={{ padding: 0, fontSize: '0.7rem', height: 'auto' }}
+                  >
+                    View Documentation
+                  </Button>
+                </div>
               </CardBody>
             </Card>
-          </GridItem>
-          <GridItem span={5}>
-            <Card>
+          </div>
+          
+          {/* Main Content Area */}
+          <div style={{ 
+            flex: '1',
+            minWidth: '0'
+          }}>
+            <Card style={{ height: '100%' }}>
               <CardTitle>Prompt Configuration</CardTitle>
               <CardBody>
                 <Form>
@@ -306,8 +365,8 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
                     />
                   </FormGroup>
 
-                  <Grid hasGutter>
-                    <GridItem span={3}>
+                  <Grid hasGutter style={{ marginBottom: '1rem' }}>
+                    <GridItem span={6}>
                       <FormGroup label="Temperature" fieldId="temperature">
                         <NumberInput
                           value={modelParams.temperature}
@@ -329,7 +388,7 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
                         />
                       </FormGroup>
                     </GridItem>
-                    <GridItem span={3}>
+                    <GridItem span={6}>
                       <FormGroup label="Max Length" fieldId="max-len">
                         <NumberInput
                           value={modelParams.max_len}
@@ -351,7 +410,10 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
                         />
                       </FormGroup>
                     </GridItem>
-                    <GridItem span={3}>
+                  </Grid>
+                  
+                  <Grid hasGutter style={{ marginBottom: '1.5rem' }}>
+                    <GridItem span={6}>
                       <FormGroup label="Top P" fieldId="top-p">
                         <NumberInput
                           value={modelParams.top_p}
@@ -373,7 +435,7 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
                         />
                       </FormGroup>
                     </GridItem>
-                    <GridItem span={3}>
+                    <GridItem span={6}>
                       <FormGroup label="Top K" fieldId="top-k">
                         <NumberInput
                           value={modelParams.top_k}
@@ -458,12 +520,17 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
                 )}
               </CardBody>
             </Card>
-          </GridItem>
-
-          <GridItem span={4}>
+          </div>
+          
+          {/* History Log Section */}
+          <div style={{ 
+            flex: '0 0 350px',
+            minWidth: '350px',
+            maxWidth: '400px'
+          }}>
             <HistoryLog history={history} onHistoryUpdate={loadHistory} />
-          </GridItem>
-        </Grid>
+          </div>
+        </div>
       </PageSection>
 
       <ProjectEditModal
@@ -479,6 +546,11 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
         onConfirm={handleDeleteProject}
         project={currentProject}
         isDeleting={isDeleting}
+      />
+
+      <ApiDocumentationModal
+        isOpen={isApiDocModalOpen}
+        onClose={() => setIsApiDocModalOpen(false)}
       />
     </Page>
   );
