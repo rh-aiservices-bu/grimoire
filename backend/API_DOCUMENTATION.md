@@ -49,7 +49,29 @@ curl http://localhost:3001/prompt/newsummary/llama32-full
   "topK": 50,
   "variables": {
     "content": "Article text here..."
-  }
+  },
+  "is_prod": false
+}
+```
+
+### 3. Get Production Prompt Configuration
+```bash
+curl http://localhost:3001/prompt/newsummary/llama32-full/prod
+```
+
+**Response Example:**
+```json
+{
+  "userPrompt": "Summarize this article: {{content}}",
+  "systemPrompt": "You are a production-ready news summarizer",
+  "temperature": 0.6,
+  "maxLen": 800,
+  "topP": 0.85,
+  "topK": 40,
+  "variables": {
+    "content": "Article text here..."
+  },
+  "is_prod": true
 }
 ```
 
@@ -64,6 +86,11 @@ curl http://localhost:3001/prompt/newsummary/llama32-full
 - **GET** `/prompt/{project_name}/{provider_id}` - Get most recent prompt configuration
 - **Tag**: `External API`
 - **Use Case**: Retrieve tested prompt templates for external use
+
+### Production Prompt Configuration
+- **GET** `/prompt/{project_name}/{provider_id}/prod` - Get production-ready prompt configuration
+- **Tag**: `External API`
+- **Use Case**: Access only production-tested, approved prompts for deployment
 
 ## 🏷️ API Organization
 
@@ -131,6 +158,20 @@ if projects:
     )
     prompt_config = prompt_response.json()
     print(f"Latest prompt: {prompt_config['userPrompt']}")
+    print(f"Is production: {prompt_config['is_prod']}")
+    
+    # Get production prompt specifically
+    try:
+        prod_response = requests.get(
+            f"http://localhost:3001/prompt/{project['name']}/{project['provider_id']}/prod"
+        )
+        if prod_response.status_code == 200:
+            prod_config = prod_response.json()
+            print(f"Production prompt: {prod_config['userPrompt']}")
+        else:
+            print("No production prompt available")
+    except requests.exceptions.RequestException:
+        print("Error getting production prompt")
 ```
 
 ### JavaScript Example
@@ -147,6 +188,22 @@ if (projects.length > 0) {
     );
     const promptConfig = await promptResponse.json();
     console.log('Latest prompt:', promptConfig.userPrompt);
+    console.log('Is production:', promptConfig.is_prod);
+    
+    // Get production prompt specifically
+    try {
+        const prodResponse = await fetch(
+            `http://localhost:3001/prompt/${project.name}/${project.provider_id}/prod`
+        );
+        if (prodResponse.ok) {
+            const prodConfig = await prodResponse.json();
+            console.log('Production prompt:', prodConfig.userPrompt);
+        } else {
+            console.log('No production prompt available');
+        }
+    } catch (error) {
+        console.log('Error getting production prompt:', error);
+    }
 }
 ```
 

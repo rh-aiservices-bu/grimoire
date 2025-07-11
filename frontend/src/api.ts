@@ -69,6 +69,7 @@ export const api = {
     data: {
       rating?: string;
       notes?: string;
+      is_prod?: boolean;
     }
   ): Promise<PromptHistory> => {
     const response = await axios.put(`${API_BASE}/projects/${projectId}/history/${historyId}`, data);

@@ -153,7 +153,7 @@ async def get_prompt_history(project_id: int, db: Session = Depends(get_db)):
     
     history = db.query(PromptHistory).filter(
         PromptHistory.project_id == project_id
-    ).order_by(PromptHistory.created_at.desc()).all()
+    ).order_by(PromptHistory.is_prod.desc(), PromptHistory.created_at.desc()).all()
     
     # Parse variables JSON
     for item in history:
@@ -225,6 +225,14 @@ async def update_prompt_history(
         history_item.rating = history_update.rating
     if history_update.notes is not None:
         history_item.notes = history_update.notes
+    if history_update.is_prod is not None:
+        # If setting as prod, remove prod status from other items in the same project
+        if history_update.is_prod:
+            db.query(PromptHistory).filter(
+                PromptHistory.project_id == project_id,
+                PromptHistory.id != history_id
+            ).update({"is_prod": False})
+        history_item.is_prod = history_update.is_prod
     
     db.commit()
     db.refresh(history_item)
@@ -386,6 +394,62 @@ async def get_projects_and_models(db: Session = Depends(get_db)):
     
     return ProjectsModelsResponse(projects=project_summaries)
 
+@app.get("/prompt/{project_name}/{provider_id}/prod", response_model=LatestPromptResponse, tags=["External API"])
+async def get_prod_prompt(project_name: str, provider_id: str, db: Session = Depends(get_db)):
+    """
+    Get the production-ready prompt configuration for a specific project and model.
+    
+    Returns the prompt marked as "prod" (production-ready) for the specified
+    project and provider combination. If no prod prompt exists, returns 404.
+    
+    **Path Parameters:**
+    - `project_name`: The name of the project (e.g., "newsummary")
+    - `provider_id`: The model provider ID (e.g., "llama32-full")
+    
+    **Example Request:**
+    ```
+    GET /prompt/newsummary/llama32-full/prod
+    ```
+    
+    **Use Case:** Get only production-ready, tested prompts for deployment
+    """
+    # Find project by name and provider_id
+    project = db.query(Project).filter(
+        Project.name == project_name,
+        Project.provider_id == provider_id
+    ).first()
+    
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Get the prod prompt for this project
+    prod_history = db.query(PromptHistory).filter(
+        PromptHistory.project_id == project.id,
+        PromptHistory.is_prod == True
+    ).first()
+    
+    if not prod_history:
+        raise HTTPException(status_code=404, detail="No production prompt found for this project")
+    
+    # Parse variables if they exist
+    variables = None
+    if prod_history.variables:
+        try:
+            variables = json.loads(prod_history.variables)
+        except:
+            variables = None
+    
+    return LatestPromptResponse(
+        userPrompt=prod_history.user_prompt,
+        systemPrompt=prod_history.system_prompt,
+        temperature=prod_history.temperature,
+        maxLen=prod_history.max_len,
+        topP=prod_history.top_p,
+        topK=prod_history.top_k,
+        variables=variables,
+        is_prod=prod_history.is_prod
+    )
+
 @app.get("/prompt/{project_name}/{provider_id}", response_model=LatestPromptResponse, tags=["External API"])
 async def get_latest_prompt(
     project_name: str, 
@@ -458,7 +522,8 @@ async def get_latest_prompt(
         maxLen=latest_history.max_len,
         topP=latest_history.top_p,
         topK=latest_history.top_k,
-        variables=variables
+        variables=variables,
+        is_prod=latest_history.is_prod
     )
 
 @app.get("/", tags=["Documentation"])

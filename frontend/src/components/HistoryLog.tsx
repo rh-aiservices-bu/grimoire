@@ -15,10 +15,12 @@ import {
   DescriptionListDescription,
   Flex,
   FlexItem,
+  Badge,
 } from '@patternfly/react-core';
-import { ThumbsUpIcon, ThumbsDownIcon, EditIcon } from '@patternfly/react-icons';
+import { ThumbsUpIcon, ThumbsDownIcon, EditIcon, StarIcon } from '@patternfly/react-icons';
 import { PromptHistory } from '../types';
 import { NotesModal } from './NotesModal';
+import { ProdConfirmationModal } from './ProdConfirmationModal';
 import { api } from '../api';
 
 interface HistoryLogProps {
@@ -31,6 +33,8 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({ history, onHistoryUpdate
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
   const [notesItem, setNotesItem] = useState<PromptHistory | null>(null);
+  const [isProdModalOpen, setIsProdModalOpen] = useState(false);
+  const [prodItem, setProdItem] = useState<PromptHistory | null>(null);
 
   const handleItemClick = (item: PromptHistory) => {
     setSelectedItem(item);
@@ -76,6 +80,23 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({ history, onHistoryUpdate
     }
   };
 
+  const handleProdClick = (item: PromptHistory) => {
+    setProdItem(item);
+    setIsProdModalOpen(true);
+  };
+
+  const handleProdConfirm = async () => {
+    if (!prodItem) return;
+    
+    try {
+      const newProdStatus = !prodItem.is_prod;
+      await api.updatePromptHistory(prodItem.project_id, prodItem.id, { is_prod: newProdStatus });
+      onHistoryUpdate();
+    } catch (error) {
+      console.error('Failed to update production status:', error);
+    }
+  };
+
   return (
     <>
       <Card isFullHeight>
@@ -98,9 +119,17 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({ history, onHistoryUpdate
                     style={{ cursor: 'pointer' }}
                     onClick={() => handleItemClick(item)}
                   >
-                    <small style={{ color: '#6a6e73' }}>
-                      {formatDate(item.created_at)}
-                    </small>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <small style={{ color: '#6a6e73' }}>
+                        {formatDate(item.created_at)}
+                      </small>
+                      {item.is_prod && (
+                        <Badge>
+                          <StarIcon style={{ fontSize: '12px', marginRight: '4px' }} />
+                          PROD
+                        </Badge>
+                      )}
+                    </div>
                     <p style={{ fontWeight: 'bold', marginTop: '0.25rem', marginBottom: '0.25rem' }}>
                       {truncateText(item.user_prompt)}
                     </p>
@@ -146,6 +175,18 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({ history, onHistoryUpdate
                       >
                         Notes
                       </Button>
+                    </FlexItem>
+                    <FlexItem>
+                      <Button
+                        variant={item.is_prod ? 'primary' : 'tertiary'}
+                        icon={<StarIcon />}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleProdClick(item);
+                        }}
+                        size="sm"
+                        title={item.is_prod ? 'Remove production tag' : 'Mark as production'}
+                      />
                     </FlexItem>
                   </Flex>
                 </div>
@@ -245,6 +286,20 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({ history, onHistoryUpdate
                   </DescriptionListDescription>
                 </DescriptionListGroup>
               )}
+
+              <DescriptionListGroup>
+                <DescriptionListTerm>Production Status</DescriptionListTerm>
+                <DescriptionListDescription>
+                  {selectedItem.is_prod ? (
+                    <Badge>
+                      <StarIcon style={{ fontSize: '12px', marginRight: '4px' }} />
+                      PROD
+                    </Badge>
+                  ) : (
+                    'Not marked as production'
+                  )}
+                </DescriptionListDescription>
+              </DescriptionListGroup>
             </DescriptionList>
           )}
         </ModalBody>
@@ -260,6 +315,13 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({ history, onHistoryUpdate
         onClose={() => setIsNotesModalOpen(false)}
         onSave={handleSaveNotes}
         initialNotes={notesItem?.notes || ''}
+      />
+
+      <ProdConfirmationModal
+        isOpen={isProdModalOpen}
+        onClose={() => setIsProdModalOpen(false)}
+        onConfirm={handleProdConfirm}
+        isCurrentlyProd={prodItem?.is_prod || false}
       />
     </>
   );

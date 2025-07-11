@@ -45,6 +45,7 @@ class PromptHistoryResponse(BaseModel):
     response: Optional[str] = None
     rating: Optional[str] = None
     notes: Optional[str] = None
+    is_prod: Optional[bool] = False
     created_at: datetime
     
     class Config:
@@ -65,6 +66,7 @@ class GenerateResponse(BaseModel):
 class PromptHistoryUpdate(BaseModel):
     rating: Optional[str] = None
     notes: Optional[str] = None
+    is_prod: Optional[bool] = None
 
 class LatestPromptResponse(BaseModel):
     userPrompt: str
@@ -74,6 +76,7 @@ class LatestPromptResponse(BaseModel):
     topP: Optional[float] = None
     topK: Optional[int] = None
     variables: Optional[Dict[str, str]] = None
+    is_prod: Optional[bool] = False
 
 class ProjectSummary(BaseModel):
     name: str

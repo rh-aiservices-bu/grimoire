@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, Float, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, DateTime, Float, ForeignKey, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
@@ -32,6 +32,7 @@ class PromptHistory(Base):
     response = Column(Text, nullable=True)
     rating = Column(String, nullable=True)  # 'thumbs_up', 'thumbs_down', or null
     notes = Column(Text, nullable=True)
+    is_prod = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     # Relationship to project

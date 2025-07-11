@@ -8,13 +8,17 @@ A web application built with PatternFly for experimenting with prompts using Lla
 - **Prompt Experimentation**: Enter user and system prompts with template variable support
 - **Model Parameters**: Configure temperature, max_len, top_p, and top_k parameters
 - **History Tracking**: View and manage your prompt/response history per project
+- **Production Tagging**: Mark prompts as production-ready with star ratings and badges
+- **Rating & Notes**: Rate prompts with thumbs up/down and add detailed notes
 - **Database Persistence**: SQLite database for storing projects and history
+- **API Access**: External API endpoints for integration with other systems
 - **OpenShift Ready**: Includes Containerfile and Helm chart for deployment
 
 ## Quick Start
 
 ### Prerequisites
 
+- Python 3.8+
 - Node.js 18+
 - npm
 - A running Llama Stack server
@@ -24,8 +28,10 @@ A web application built with PatternFly for experimenting with prompts using Lla
 1. **Start the Backend**:
    ```bash
    cd backend
-   npm install
-   npm run dev
+   python3 -m venv myenv
+   source myenv/bin/activate
+   pip install -r requirements.txt
+   python main.py
    ```
 
 2. **Start the Frontend** (in a new terminal):
@@ -93,13 +99,27 @@ Update `helm/values.yaml` to customize:
 - `GET /api/projects` - List all projects
 - `POST /api/projects` - Create a new project
 - `GET /api/projects/:id` - Get a specific project
+- `PUT /api/projects/:id` - Update a project
+- `DELETE /api/projects/:id` - Delete a project
 
 ### Prompt History
 - `GET /api/projects/:id/history` - Get prompt history for a project
 - `POST /api/projects/:id/history` - Save prompt history entry
+- `PUT /api/projects/:id/history/:historyId` - Update history (rating, notes, production status)
 
 ### Generation
-- `POST /api/projects/:id/generate` - Generate response using Llama Stack
+- `POST /api/projects/:id/generate` - Generate response using Llama Stack (streaming)
+
+### External API
+- `GET /api/projects-models` - List all projects and models for integration
+- `GET /prompt/{project_name}/{provider_id}` - Get latest prompt configuration
+- `GET /prompt/{project_name}/{provider_id}/prod` - Get production prompt configuration
+
+### Production Features
+- Star rating system to mark prompts as production-ready
+- Only one prompt per project can be marked as production
+- Production prompts are sorted to the top of history
+- Dedicated API endpoint for accessing production prompts
 
 ## Development
 
@@ -112,10 +132,12 @@ Update `helm/values.yaml` to customize:
 │   │   ├── types.ts       # TypeScript interfaces
 │   │   ├── api.ts        # API client
 │   │   └── App.tsx       # Main application
-├── backend/               # Node.js/Express backend
-│   └── src/
-│       ├── database.ts   # SQLite database manager
-│       └── index.ts      # Express server
+├── backend/               # Python FastAPI backend
+│   ├── main.py           # FastAPI application
+│   ├── models.py         # SQLAlchemy database models
+│   ├── schemas.py        # Pydantic schemas
+│   ├── database.py       # Database connection
+│   └── requirements.txt  # Python dependencies
 ├── helm/                 # Helm chart for Kubernetes
 ├── Containerfile         # Container build file
 └── README.md
@@ -129,9 +151,9 @@ Update `helm/values.yaml` to customize:
 - `npm run preview` - Preview production build
 
 **Backend**:
-- `npm run dev` - Start development server with hot reload
-- `npm run build` - Compile TypeScript
-- `npm start` - Start production server
+- `python main.py` - Start FastAPI development server
+- `uvicorn main:app --reload` - Start with auto-reload
+- `python migrate_prod.py` - Run database migrations
 
 ## Environment Variables
 

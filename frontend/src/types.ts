@@ -19,6 +19,7 @@ export interface PromptHistory {
   response?: string;
   rating?: string;
   notes?: string;
+  is_prod?: boolean;
   created_at: string;
 }
 
