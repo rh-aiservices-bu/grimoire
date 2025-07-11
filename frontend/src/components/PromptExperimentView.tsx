@@ -182,7 +182,7 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
         }
       );
     } catch (err) {
-      setError('Failed to generate response. Please check your Llamastack configuration.');
+      setError('Failed to generate response. Please check your Llama Stack configuration.');
       console.error('Generation error:', err);
       setIsLoading(false);
     }

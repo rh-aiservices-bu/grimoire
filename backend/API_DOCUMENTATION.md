@@ -22,12 +22,12 @@ curl http://localhost:3001/api/projects-models
     {
       "name": "newsummary",
       "provider_id": "llama32-full",
-      "llamastack_url": "http://llamastack-server.example.com"
+      "llamastack_url": "http://llama-stack-server.example.com"
     },
     {
       "name": "newone", 
       "provider_id": "llama-3.2-3b",
-      "llamastack_url": "http://llamastack-server.example.com"
+      "llamastack_url": "http://llama-stack-server.example.com"
     }
   ]
 }

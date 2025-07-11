@@ -123,7 +123,7 @@ function App() {
         <PageSection>
           <Title headingLevel="h1" size="2xl">Prompt Experimentation Tool</Title>
           <p>
-            Experiment with prompts using different Llamastack models and track your results.
+            Experiment with prompts using different Llama Stack models and track your results.
           </p>
           
           {error && (

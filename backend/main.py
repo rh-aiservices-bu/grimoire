@@ -24,7 +24,7 @@ from schemas import (
 app = FastAPI(
     title="Prompt Experimentation Tool API",
     description="""
-    A comprehensive API for managing prompt experiments with Llamastack models.
+    A comprehensive API for managing prompt experiments with Llama Stack models.
     
     ## Features
     
@@ -238,7 +238,7 @@ async def update_prompt_history(
     
     return history_item
 
-# Generate response using Llamastack (streaming)
+# Generate response using Llama Stack (streaming)
 @app.post("/api/projects/{project_id}/generate", tags=["Generation"])
 async def generate_response(
     project_id: int,
@@ -275,7 +275,7 @@ async def generate_response(
         "top_k": request.topK or 50,
     }
     
-    print(f"Making request to Llamastack: {project.llamastack_url}")
+    print(f"Making request to Llama Stack: {project.llamastack_url}")
     print(f"Model: {project.provider_id}")
     print(f"Messages: {messages}")
     print(f"Sampling params: {sampling_params}")
@@ -287,7 +287,7 @@ async def generate_response(
     def worker():
         nonlocal full_response
         try:
-            # Create Llamastack client
+            # Create Llama Stack client
             base_url = project.llamastack_url
             client = LlamaStackClient(base_url=base_url)
             
@@ -357,7 +357,7 @@ async def get_projects_and_models(db: Session = Depends(get_db)):
     Get all available projects and their model configurations.
     
     This endpoint provides a list of all projects in the system along with their
-    associated model names (provider_id) and Llamastack URLs. Useful for discovering
+    associated model names (provider_id) and Llama Stack URLs. Useful for discovering
     available projects and their configurations.
     
     **Example Response:**
@@ -367,7 +367,7 @@ async def get_projects_and_models(db: Session = Depends(get_db)):
         {
           "name": "newsummary",
           "provider_id": "llama32-full",
-          "llamastack_url": "http://llamastack-server.example.com"
+          "llamastack_url": "http://llama-stack-server.example.com"
         }
       ]
     }
@@ -466,7 +466,7 @@ async def root():
     """
     Welcome to the Prompt Experimentation Tool API!
     
-    This API provides comprehensive prompt experimentation capabilities with Llamastack models.
+    This API provides comprehensive prompt experimentation capabilities with Llama Stack models.
     
     ## 🚀 Quick Links
     

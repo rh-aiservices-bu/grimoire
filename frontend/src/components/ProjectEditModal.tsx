@@ -74,7 +74,7 @@ export const ProjectEditModal: React.FC<ProjectEditModalProps> = ({
               onChange={(_event, value) => setName(value)}
             />
           </FormGroup>
-          <FormGroup label="Llamastack URL" isRequired fieldId="llamastack-url">
+          <FormGroup label="Llama Stack URL" isRequired fieldId="llamastack-url">
             <TextInput
               isRequired
               type="url"

@@ -52,7 +52,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onS
               onChange={(_event, value) => setName(value)}
             />
           </FormGroup>
-          <FormGroup label="Llamastack URL" isRequired fieldId="llamastack-url">
+          <FormGroup label="Llama Stack URL" isRequired fieldId="llamastack-url">
             <TextInput
               isRequired
               type="url"

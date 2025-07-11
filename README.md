@@ -1,10 +1,10 @@
 # Prompt Experimentation Tool
 
-A web application built with PatternFly for experimenting with prompts using Llamastack models. This tool allows you to create projects, configure model parameters, experiment with user and system prompts, use template variables, and track your prompt history.
+A web application built with PatternFly for experimenting with prompts using Llama Stack models. This tool allows you to create projects, configure model parameters, experiment with user and system prompts, use template variables, and track your prompt history.
 
 ## Features
 
-- **Project Management**: Create and manage multiple projects with different Llamastack configurations
+- **Project Management**: Create and manage multiple projects with different Llama Stack configurations
 - **Prompt Experimentation**: Enter user and system prompts with template variable support
 - **Model Parameters**: Configure temperature, max_len, top_p, and top_k parameters
 - **History Tracking**: View and manage your prompt/response history per project
@@ -17,7 +17,7 @@ A web application built with PatternFly for experimenting with prompts using Lla
 
 - Node.js 18+
 - npm
-- A running Llamastack server
+- A running Llama Stack server
 
 ### Local Development
 
@@ -45,8 +45,8 @@ A web application built with PatternFly for experimenting with prompts using Lla
 2. Click "Create New Project"
 3. Fill in:
    - **Project Name**: A descriptive name for your project
-   - **Llamastack URL**: Your Llamastack server URL (e.g., `http://localhost:8000`)
-   - **Provider ID**: The model name available in your Llamastack instance (e.g., `llama-3.1-8b-instruct`)
+   - **Llama Stack URL**: Your Llama Stack server URL (e.g., `http://localhost:8000`)
+   - **Provider ID**: The model name available in your Llama Stack instance (e.g., `llama-3.1-8b-instruct`)
 
 ### Using Template Variables
 
@@ -99,7 +99,7 @@ Update `helm/values.yaml` to customize:
 - `POST /api/projects/:id/history` - Save prompt history entry
 
 ### Generation
-- `POST /api/projects/:id/generate` - Generate response using Llamastack
+- `POST /api/projects/:id/generate` - Generate response using Llama Stack
 
 ## Development
 
@@ -142,8 +142,8 @@ Update `helm/values.yaml` to customize:
 
 ### Backend Connection Issues
 - Ensure the backend server is running on port 3001
-- Check that your Llamastack server is accessible
-- Verify the Llamastack URL and provider ID in your project configuration
+- Check that your Llama Stack server is accessible
+- Verify the Llama Stack URL and provider ID in your project configuration
 
 ### Database Issues
 - The SQLite database is created automatically in the backend directory

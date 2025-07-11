@@ -142,7 +142,7 @@ export const ApiDocumentationModal: React.FC<ApiDocumentationModalProps> = ({
     {
       "name": "newsummary",
       "provider_id": "llama32-full",
-      "llamastack_url": "http://llamastack-server.example.com"
+      "llamastack_url": "http://llama-stack-server.example.com"
     }
   ]
 }`}
