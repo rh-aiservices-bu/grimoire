@@ -5,6 +5,30 @@ from datetime import datetime, timezone
 
 Base = declarative_base()
 
+class User(Base):
+    __tablename__ = "users"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    git_platform = Column(String, nullable=False)  # github, gitlab, gitea
+    git_username = Column(String, nullable=False)
+    git_access_token = Column(String, nullable=False)  # encrypted token
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class PendingPR(Base):
+    __tablename__ = "pending_prs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    prompt_history_id = Column(Integer, ForeignKey("prompt_history.id"), nullable=False)
+    pr_url = Column(String, nullable=False)
+    pr_number = Column(Integer, nullable=False)
+    is_merged = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    
+    # Relationships
+    project = relationship("Project", backref="pending_prs")
+    prompt_history = relationship("PromptHistory", backref="pending_pr")
+
 class Project(Base):
     __tablename__ = "projects"
     
@@ -12,6 +36,7 @@ class Project(Base):
     name = Column(String, nullable=False)
     llamastack_url = Column(String, nullable=False)
     provider_id = Column(String, nullable=False)
+    git_repo_url = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     # Relationship to prompt history

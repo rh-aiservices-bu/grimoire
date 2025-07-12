@@ -15,6 +15,7 @@ interface ProdConfirmationModalProps {
   onClose: () => void;
   onConfirm: () => void;
   isCurrentlyProd: boolean;
+  hasGitRepo?: boolean;
 }
 
 export const ProdConfirmationModal: React.FC<ProdConfirmationModalProps> = ({
@@ -22,6 +23,7 @@ export const ProdConfirmationModal: React.FC<ProdConfirmationModalProps> = ({
   onClose,
   onConfirm,
   isCurrentlyProd,
+  hasGitRepo = false,
 }) => {
   const handleConfirm = () => {
     onConfirm();
@@ -59,10 +61,21 @@ export const ProdConfirmationModal: React.FC<ProdConfirmationModalProps> = ({
                 This will:
               </p>
               <ul style={{ marginTop: '8px', paddingLeft: '20px' }}>
-                <li>Add the <Badge><StarIcon style={{ fontSize: '12px', marginRight: '4px' }} />PROD</Badge> tag to this prompt</li>
-                <li>Remove the production tag from any other prompt in this project</li>
-                <li>Move this prompt to the top of the history list</li>
-                <li>Make it accessible via the production API endpoint</li>
+                {hasGitRepo ? (
+                  <>
+                    <li>Create a pull request in the configured git repository</li>
+                    <li>Add/update the production prompt file in the PR</li>
+                    <li>Guide you to the PR for review and approval</li>
+                    <li>Once merged, make the prompt accessible via the production API endpoint</li>
+                  </>
+                ) : (
+                  <>
+                    <li>Add the <Badge><StarIcon style={{ fontSize: '12px', marginRight: '4px' }} />PROD</Badge> tag to this prompt</li>
+                    <li>Remove the production tag from any other prompt in this project</li>
+                    <li>Move this prompt to the top of the history list</li>
+                    <li>Make it accessible via the production API endpoint</li>
+                  </>
+                )}
               </ul>
             </>
           )}
@@ -70,7 +83,7 @@ export const ProdConfirmationModal: React.FC<ProdConfirmationModalProps> = ({
       </ModalBody>
       <ModalFooter>
         <Button key="confirm" variant="primary" onClick={handleConfirm}>
-          {isCurrentlyProd ? "Remove Tag" : "Mark as Production"}
+          {isCurrentlyProd ? "Remove Tag" : hasGitRepo ? "Create Pull Request" : "Mark as Production"}
         </Button>
         <Button key="cancel" variant="link" onClick={onClose}>
           Cancel

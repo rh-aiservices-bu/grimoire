@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Card,
   CardTitle,
@@ -16,9 +16,12 @@ import {
   Flex,
   FlexItem,
   Badge,
+  FormSelect,
+  FormSelectOption,
+  Alert,
 } from '@patternfly/react-core';
 import { ThumbsUpIcon, ThumbsDownIcon, EditIcon, StarIcon } from '@patternfly/react-icons';
-import { PromptHistory } from '../types';
+import { PromptHistory, PendingPR, GitUser } from '../types';
 import { NotesModal } from './NotesModal';
 import { ProdConfirmationModal } from './ProdConfirmationModal';
 import { api } from '../api';
@@ -26,15 +29,30 @@ import { api } from '../api';
 interface HistoryLogProps {
   history: PromptHistory[];
   onHistoryUpdate: () => void;
+  projectId: number;
+  hasGitRepo?: boolean;
+  gitUser?: GitUser | null;
+  onGitAuth?: () => void;
+  onNotification?: (notification: {
+    title: string;
+    variant: 'success' | 'danger' | 'warning' | 'info';
+    message?: string;
+    actionLinks?: Array<{ text: string; url: string }>;
+    actionButton?: { text: string; onClick: () => void };
+  }) => void;
 }
 
-export const HistoryLog: React.FC<HistoryLogProps> = ({ history, onHistoryUpdate }) => {
+export const HistoryLog: React.FC<HistoryLogProps> = ({ history, onHistoryUpdate, projectId, hasGitRepo = false, gitUser, onGitAuth, onNotification }) => {
   const [selectedItem, setSelectedItem] = useState<PromptHistory | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
   const [notesItem, setNotesItem] = useState<PromptHistory | null>(null);
   const [isProdModalOpen, setIsProdModalOpen] = useState(false);
   const [prodItem, setProdItem] = useState<PromptHistory | null>(null);
+  const [viewMode, setViewMode] = useState<'experimental' | 'prod'>('experimental');
+  const [prodHistory, setProdHistory] = useState<PromptHistory[]>([]);
+  const [pendingPRs, setPendingPRs] = useState<PendingPR[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleItemClick = (item: PromptHistory) => {
     setSelectedItem(item);
@@ -89,30 +107,194 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({ history, onHistoryUpdate
     if (!prodItem) return;
     
     try {
-      const newProdStatus = !prodItem.is_prod;
-      await api.updatePromptHistory(prodItem.project_id, prodItem.id, { is_prod: newProdStatus });
-      onHistoryUpdate();
+      if (hasGitRepo && !prodItem.is_prod) {
+        // Check if user is authenticated with git
+        if (!gitUser) {
+          alert('Please authenticate with git first to create pull requests.');
+          if (onGitAuth) {
+            onGitAuth();
+          }
+          return;
+        }
+        
+        // Create git PR instead of direct database update
+        const result = await api.tagPromptAsProd(projectId, prodItem.id);
+        console.log('PR created:', result);
+        
+        // Show success notification with link to PR
+        if (onNotification) {
+          onNotification({
+            title: 'Pull Request Created Successfully',
+            variant: 'success',
+            message: `PR #${result.pr_number} has been created. Click the link below to review and merge it.`,
+            actionLinks: [{ text: `View PR #${result.pr_number}`, url: result.pr_url }]
+          });
+        }
+        
+        // Refresh pending PRs and prod history
+        if (viewMode === 'prod') {
+          loadPendingPRs();
+          loadProdHistory();
+        }
+      } else {
+        // Original behavior for projects without git repo
+        const newProdStatus = !prodItem.is_prod;
+        await api.updatePromptHistory(prodItem.project_id, prodItem.id, { is_prod: newProdStatus });
+        onHistoryUpdate();
+      }
     } catch (error) {
       console.error('Failed to update production status:', error);
+      if (onNotification) {
+        onNotification({
+          title: 'Pull Request Creation Failed',
+          variant: 'danger',
+          message: 'Failed to create pull request. This might be due to invalid git credentials or insufficient repository permissions.',
+          actionButton: onGitAuth ? { 
+            text: 'Re-authenticate with Git', 
+            onClick: onGitAuth 
+          } : undefined
+        });
+      }
     }
   };
+
+  const loadProdHistory = async () => {
+    if (!hasGitRepo) return;
+    
+    setIsLoading(true);
+    try {
+      const gitHistory = await api.getProdHistoryFromGit(projectId);
+      setProdHistory(gitHistory);
+    } catch (error) {
+      console.error('Failed to load prod history from git:', error);
+      setProdHistory([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadPendingPRs = async () => {
+    if (!hasGitRepo || !gitUser) return;
+    
+    try {
+      // This now does live checking automatically
+      const prs = await api.getPendingPRs(projectId);
+      setPendingPRs(prs);
+    } catch (error) {
+      console.error('Failed to load pending PRs:', error);
+      setPendingPRs([]);
+    }
+  };
+
+  // Auto-refresh prod data when git user changes or view mode changes
+  useEffect(() => {
+    if (viewMode === 'prod' && hasGitRepo && gitUser) {
+      loadProdHistory();
+      loadPendingPRs();
+    }
+  }, [gitUser, viewMode, hasGitRepo]);
+
+  const handleViewModeChange = (mode: 'experimental' | 'prod') => {
+    setViewMode(mode);
+    if (mode === 'prod' && hasGitRepo && gitUser) {
+      loadProdHistory();
+      loadPendingPRs();
+    }
+  };
+
+  const currentHistory = viewMode === 'experimental' ? history.filter(h => !h.is_prod) : prodHistory;
 
   return (
     <>
       <Card isFullHeight>
-        <CardTitle>History Log</CardTitle>
+        <CardTitle>
+          <Flex justifyContent={{ default: 'justifyContentSpaceBetween' }}>
+            <FlexItem>History Log</FlexItem>
+            {hasGitRepo && (
+              <FlexItem>
+                <FormSelect
+                  value={viewMode}
+                  onChange={(_event, value) => handleViewModeChange(value as 'experimental' | 'prod')}
+                  aria-label="Select history view"
+                  style={{ width: '150px' }}
+                >
+                  <FormSelectOption key="experimental" value="experimental" label="Experimental" />
+                  <FormSelectOption key="prod" value="prod" label="Production" />
+                </FormSelect>
+              </FlexItem>
+            )}
+          </Flex>
+        </CardTitle>
         <CardBody>
-          {history.length === 0 ? (
-            <p>No history yet. Generate some responses to see them here.</p>
+          {hasGitRepo && !gitUser && (
+            <Alert variant="warning" title="Git Authentication Required" style={{ marginBottom: '1rem' }}>
+              <p>This project uses git for production prompts. Please authenticate with your git platform to create pull requests.</p>
+              {onGitAuth && (
+                <Button variant="primary" size="sm" onClick={onGitAuth} style={{ marginTop: '0.5rem' }}>
+                  Authenticate with Git
+                </Button>
+              )}
+            </Alert>
+          )}
+
+          {hasGitRepo && gitUser && (
+            <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem', backgroundColor: '#f8f9fa', borderRadius: '4px', fontSize: '14px' }}>
+              <span>📡 Git: {gitUser.git_username}@{gitUser.git_platform}</span>
+              {onGitAuth && (
+                <Button variant="link" size="sm" onClick={onGitAuth}>
+                  Re-authenticate
+                </Button>
+              )}
+            </div>
+          )}
+
+
+          {viewMode === 'prod' && hasGitRepo && pendingPRs.length > 0 && (
+            <Alert variant="info" title="Pending Pull Requests" style={{ marginBottom: '1rem' }}>
+              <p>There are {pendingPRs.length} pending pull request(s) for production prompts:</p>
+              <ul style={{ marginTop: '0.5rem' }}>
+                {pendingPRs.map(pr => (
+                  <li key={pr.id}>
+                    <a href={pr.pr_url} target="_blank" rel="noopener noreferrer">
+                      PR #{pr.pr_number}
+                    </a>
+                    {' - '}
+                    {new Date(pr.created_at).toLocaleDateString()}
+                  </li>
+                ))}
+              </ul>
+            </Alert>
+          )}
+
+          {viewMode === 'prod' && hasGitRepo && prodHistory.length === 0 && pendingPRs.length === 0 && !isLoading && (
+            <Alert variant="warning" title="No Production Prompts" style={{ marginBottom: '1rem' }}>
+              <p>No prompts have been tagged as production yet, or pending PRs have not been merged.</p>
+              <p>Tag a prompt with the production label to create a pull request in your git repository.</p>
+            </Alert>
+          )}
+
+          {currentHistory.length === 0 && !isLoading ? (
+            <p>
+              {viewMode === 'experimental' 
+                ? "No experimental history yet. Generate some responses to see them here."
+                : hasGitRepo 
+                  ? "No production prompts found in git repository."
+                  : "No history yet. Generate some responses to see them here."
+              }
+            </p>
           ) : (
             <div>
-              {history.map((item) => (
+              {currentHistory.map((item, index) => (
                 <div 
                   key={item.id}
                   style={{ 
                     padding: '1rem',
                     borderBottom: '1px solid #e5e5e5',
-                    marginBottom: '0.5rem'
+                    marginBottom: '0.5rem',
+                    // Highlight the currently served prompt (first in production list)
+                    backgroundColor: viewMode === 'prod' && index === 0 ? '#f0f8ff' : 'transparent',
+                    borderLeft: viewMode === 'prod' && index === 0 ? '4px solid #0066cc' : 'none',
+                    borderRadius: viewMode === 'prod' && index === 0 ? '4px' : '0'
                   }}
                 >
                   <div 
@@ -123,10 +305,16 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({ history, onHistoryUpdate
                       <small style={{ color: '#6a6e73' }}>
                         {formatDate(item.created_at)}
                       </small>
-                      {item.is_prod && (
+                      {/* Show PROD badge only in experimental view, and show "CURRENT" badge for active prompt in prod view */}
+                      {viewMode === 'experimental' && item.is_prod && (
                         <Badge>
                           <StarIcon style={{ fontSize: '12px', marginRight: '4px' }} />
                           PROD
+                        </Badge>
+                      )}
+                      {viewMode === 'prod' && index === 0 && (
+                        <Badge variant="outline" color="blue">
+                          ⚡ CURRENT
                         </Badge>
                       )}
                     </div>
@@ -322,6 +510,7 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({ history, onHistoryUpdate
         onClose={() => setIsProdModalOpen(false)}
         onConfirm={handleProdConfirm}
         isCurrentlyProd={prodItem?.is_prod || false}
+        hasGitRepo={hasGitRepo}
       />
     </>
   );

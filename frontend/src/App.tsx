@@ -5,12 +5,16 @@ import {
   Title,
   Spinner,
   Alert,
+  AlertGroup,
+  AlertActionCloseButton,
+  Button,
 } from '@patternfly/react-core';
-import { Project } from './types';
+import { Project, GitUser } from './types';
 import { api } from './api';
 import { ProjectList } from './components/ProjectList';
 import { ProjectModal } from './components/ProjectModal';
 import { PromptExperimentView } from './components/PromptExperimentView';
+import { GitAuthModal } from './components/GitAuthModal';
 
 function App() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -18,10 +22,31 @@ function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [gitUser, setGitUser] = useState<GitUser | null>(null);
+  const [isGitAuthModalOpen, setIsGitAuthModalOpen] = useState(false);
+  const [notifications, setNotifications] = useState<Array<{
+    id: string;
+    title: string;
+    variant: 'success' | 'danger' | 'warning' | 'info';
+    message?: string;
+    actionLinks?: Array<{ text: string; url: string }>;
+    actionButton?: { text: string; onClick: () => void };
+  }>>([]);
 
   useEffect(() => {
     loadProjects();
+    loadGitUser();
   }, []);
+
+  const loadGitUser = async () => {
+    try {
+      const user = await api.getCurrentGitUser();
+      setGitUser(user);
+    } catch (error) {
+      // No git user authenticated yet, that's fine
+      setGitUser(null);
+    }
+  };
 
   const loadProjects = async () => {
     try {
@@ -44,6 +69,7 @@ function App() {
     name: string;
     llamastackUrl: string;
     providerId: string;
+    gitRepoUrl?: string;
   }) => {
     try {
       const newProject = await api.createProject(data);
@@ -76,6 +102,41 @@ function App() {
     loadProjects();
   };
 
+  const addNotification = (notification: Omit<typeof notifications[0], 'id'>) => {
+    const id = Date.now().toString();
+    setNotifications(prev => [...prev, { ...notification, id }]);
+    // Auto-remove after 10 seconds unless it has action links or buttons
+    if ((!notification.actionLinks || notification.actionLinks.length === 0) && !notification.actionButton) {
+      setTimeout(() => removeNotification(id), 10000);
+    }
+  };
+
+  const removeNotification = (id: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  };
+
+  const handleGitAuth = async (data: { platform: string; username: string; access_token: string }) => {
+    try {
+      const user = await api.authenticateGit(data);
+      setGitUser(user);
+      setError(''); // Clear any previous errors
+      addNotification({
+        title: 'Git Authentication Successful',
+        variant: 'success',
+        message: `Successfully authenticated as ${user.git_username} on ${user.git_platform}`
+      });
+      // Close the git auth modal
+      setIsGitAuthModalOpen(false);
+    } catch (error) {
+      addNotification({
+        title: 'Git Authentication Failed',
+        variant: 'danger',
+        message: 'Please check your credentials and ensure your access token has repository permissions.'
+      });
+      console.error('Git authentication failed:', error);
+    }
+  };
+
   if (isLoading) {
     return (
       <Page>
@@ -89,13 +150,20 @@ function App() {
     );
   }
 
-  // Render the ProjectModal so it's always available
-  const modal = (
-    <ProjectModal
-      isOpen={isModalOpen}
-      onClose={() => setIsModalOpen(false)}
-      onSubmit={handleCreateProject}
-    />
+  // Render the modals so they're always available
+  const modals = (
+    <>
+      <ProjectModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSubmit={handleCreateProject}
+      />
+      <GitAuthModal
+        isOpen={isGitAuthModalOpen}
+        onClose={() => setIsGitAuthModalOpen(false)}
+        onSubmit={handleGitAuth}
+      />
+    </>
   );
 
   // Show experiment view if there's a selected project
@@ -110,8 +178,42 @@ function App() {
           onProjectSelect={handleSelectProject}
           allProjects={projects}
           onCreateNew={() => setIsModalOpen(true)}
+          gitUser={gitUser}
+          onGitAuth={() => setIsGitAuthModalOpen(true)}
+          onNotification={addNotification}
         />
-        {modal}
+        <AlertGroup isToast isLiveRegion>
+          {notifications.map(notification => (
+            <Alert
+              key={notification.id}
+              variant={notification.variant}
+              title={notification.title}
+              actionClose={<AlertActionCloseButton onClose={() => removeNotification(notification.id)} />}
+              actionLinks={[
+                ...(notification.actionLinks?.map(link => (
+                  <a key={link.url} href={link.url} target="_blank" rel="noopener noreferrer">
+                    {link.text}
+                  </a>
+                )) || []),
+                ...(notification.actionButton ? [
+                  <Button
+                    key="action"
+                    variant="link"
+                    onClick={() => {
+                      notification.actionButton!.onClick();
+                      removeNotification(notification.id);
+                    }}
+                  >
+                    {notification.actionButton.text}
+                  </Button>
+                ] : [])
+              ]}
+            >
+              {notification.message}
+            </Alert>
+          ))}
+        </AlertGroup>
+        {modals}
       </>
     );
   }
@@ -139,7 +241,7 @@ function App() {
           />
         </PageSection>
       </Page>
-      {modal}
+      {modals}
     </>
   );
 }

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Project, PromptHistory } from './types';
+import { Project, PromptHistory, GitUser, PendingPR } from './types';
 
 const API_BASE = `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/api`;
 
@@ -14,6 +14,7 @@ export const api = {
     name: string;
     llamastackUrl: string;
     providerId: string;
+    gitRepoUrl?: string;
   }): Promise<Project> => {
     const response = await axios.post(`${API_BASE}/projects`, data);
     return response.data;
@@ -30,6 +31,7 @@ export const api = {
       name?: string;
       llamastackUrl?: string;
       providerId?: string;
+      gitRepoUrl?: string;
     }
   ): Promise<Project> => {
     const response = await axios.put(`${API_BASE}/projects/${id}`, data);
@@ -146,5 +148,54 @@ export const api = {
     } catch (error) {
       onError(error instanceof Error ? error.message : 'Unknown error');
     }
+  },
+
+  // Git authentication
+  authenticateGit: async (data: {
+    platform: string;
+    username: string;
+    access_token: string;
+  }): Promise<GitUser> => {
+    const response = await axios.post(`${API_BASE}/git/auth`, data);
+    return response.data;
+  },
+
+  getCurrentGitUser: async (): Promise<GitUser | null> => {
+    try {
+      const response = await axios.get(`${API_BASE}/git/user`);
+      return response.data;
+    } catch (error) {
+      // Return null if no user is authenticated (404 is expected)
+      return null;
+    }
+  },
+
+  testGitRepoAccess: async (projectId: number): Promise<void> => {
+    await axios.post(`${API_BASE}/projects/${projectId}/git/test-access`);
+  },
+
+  // Git operations
+  tagPromptAsProd: async (projectId: number, historyId: number): Promise<{
+    message: string;
+    pr_url: string;
+    pr_number: number;
+  }> => {
+    const response = await axios.post(`${API_BASE}/projects/${projectId}/history/${historyId}/tag-prod`);
+    return response.data;
+  },
+
+  getPendingPRs: async (projectId: number): Promise<PendingPR[]> => {
+    const response = await axios.get(`${API_BASE}/projects/${projectId}/pending-prs`);
+    return response.data;
+  },
+
+  getProdHistoryFromGit: async (projectId: number): Promise<PromptHistory[]> => {
+    const response = await axios.get(`${API_BASE}/projects/${projectId}/prod-history`);
+    return response.data;
+  },
+
+  syncPRStatus: async (projectId: number): Promise<{ message: string }> => {
+    const response = await axios.post(`${API_BASE}/projects/${projectId}/sync-prs`);
+    return response.data;
   },
 };

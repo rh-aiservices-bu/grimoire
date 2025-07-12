@@ -14,20 +14,22 @@ import {
 interface ProjectModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: { name: string; llamastackUrl: string; providerId: string }) => void;
+  onSubmit: (data: { name: string; llamastackUrl: string; providerId: string; gitRepoUrl?: string }) => void;
 }
 
 export const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit }) => {
   const [name, setName] = useState('');
   const [llamastackUrl, setLlamastackUrl] = useState('');
   const [providerId, setProviderId] = useState('');
+  const [gitRepoUrl, setGitRepoUrl] = useState('');
 
   const handleSubmit = () => {
     if (name && llamastackUrl && providerId) {
-      onSubmit({ name, llamastackUrl, providerId });
+      onSubmit({ name, llamastackUrl, providerId, gitRepoUrl: gitRepoUrl || undefined });
       setName('');
       setLlamastackUrl('');
       setProviderId('');
+      setGitRepoUrl('');
       onClose();
     }
   };
@@ -72,6 +74,16 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onS
               value={providerId}
               onChange={(_event, value) => setProviderId(value)}
               placeholder="llama-3.1-8b-instruct"
+            />
+          </FormGroup>
+          <FormGroup label="Git Repository URL (Optional)" fieldId="git-repo-url">
+            <TextInput
+              type="url"
+              id="git-repo-url"
+              name="git-repo-url"
+              value={gitRepoUrl}
+              onChange={(_event, value) => setGitRepoUrl(value)}
+              placeholder="https://github.com/username/repo"
             />
           </FormGroup>
         </Form>

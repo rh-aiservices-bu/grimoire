@@ -13,13 +13,15 @@ from llama_stack_client import LlamaStackClient
 from llama_stack_client.lib.inference.event_logger import EventLogger
 
 from database import get_db
-from models import Project, PromptHistory
+from models import Project, PromptHistory, User, PendingPR
 from schemas import (
     ProjectCreate, ProjectUpdate, ProjectResponse, 
     PromptHistoryCreate, PromptHistoryResponse, PromptHistoryUpdate,
     GenerateRequest, GenerateResponse, LatestPromptResponse,
-    ProjectSummary, ProjectsModelsResponse
+    ProjectSummary, ProjectsModelsResponse, UserCreate, UserResponse,
+    PendingPRResponse, GitAuthRequest, ProdPromptData
 )
+from git_service import GitService
 
 app = FastAPI(
     title="Prompt Experimentation Tool API",
@@ -70,6 +72,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Initialize Git Service
+git_service = GitService()
+
 def process_template_variables(text: str, variables: dict) -> str:
     """Process template variables in text"""
     if not variables:
@@ -92,11 +97,32 @@ async def create_project(project: ProjectCreate, db: Session = Depends(get_db)):
     db_project = Project(
         name=project.name,
         llamastack_url=project.llamastackUrl,
-        provider_id=project.providerId
+        provider_id=project.providerId,
+        git_repo_url=project.gitRepoUrl
     )
     db.add(db_project)
     db.commit()
     db.refresh(db_project)
+    
+    # If git repo URL is provided, create initial PR
+    if project.gitRepoUrl:
+        # Get current user (for now, just get the first user - in production you'd get from session)
+        user = db.query(User).first()
+        if user:
+            try:
+                token = git_service.decrypt_token(user.git_access_token)
+                pr_result = git_service.create_initial_pr(
+                    user.git_platform, 
+                    token, 
+                    project.gitRepoUrl, 
+                    project.name, 
+                    project.providerId
+                )
+                if pr_result:
+                    print(f"Created initial PR: {pr_result['pr_url']}")
+            except Exception as e:
+                print(f"Failed to create initial PR: {e}")
+    
     return db_project
 
 @app.get("/api/projects/{project_id}", response_model=ProjectResponse, tags=["Projects"])
@@ -123,6 +149,8 @@ async def update_project(
         project.llamastack_url = project_update.llamastackUrl
     if project_update.providerId is not None:
         project.provider_id = project_update.providerId
+    if project_update.gitRepoUrl is not None:
+        project.git_repo_url = project_update.gitRepoUrl
     
     db.commit()
     db.refresh(project)
@@ -359,6 +387,21 @@ async def generate_response(
     return StreamingResponse(streamer(), media_type="text/event-stream")
 
 
+@app.get("/api/debug/projects", tags=["Debug"])
+async def debug_projects(db: Session = Depends(get_db)):
+    """Debug endpoint to show all projects with their exact names and provider IDs"""
+    projects = db.query(Project).all()
+    return [
+        {
+            "id": p.id,
+            "name": p.name,
+            "provider_id": p.provider_id,
+            "git_repo_url": p.git_repo_url,
+            "prod_url": f"/prompt/{p.name}/{p.provider_id}/prod"
+        }
+        for p in projects
+    ]
+
 @app.get("/api/projects-models", response_model=ProjectsModelsResponse, tags=["External API"])
 async def get_projects_and_models(db: Session = Depends(get_db)):
     """
@@ -399,8 +442,8 @@ async def get_prod_prompt(project_name: str, provider_id: str, db: Session = Dep
     """
     Get the production-ready prompt configuration for a specific project and model.
     
-    Returns the prompt marked as "prod" (production-ready) for the specified
-    project and provider combination. If no prod prompt exists, returns 404.
+    Returns the prompt from git repository for the specified project and provider 
+    combination. If project has git repo, serves from git; otherwise falls back to database.
     
     **Path Parameters:**
     - `project_name`: The name of the project (e.g., "newsummary")
@@ -414,15 +457,50 @@ async def get_prod_prompt(project_name: str, provider_id: str, db: Session = Dep
     **Use Case:** Get only production-ready, tested prompts for deployment
     """
     # Find project by name and provider_id
+    print(f"Looking for project: name='{project_name}', provider_id='{provider_id}'")
     project = db.query(Project).filter(
         Project.name == project_name,
         Project.provider_id == provider_id
     ).first()
     
     if not project:
+        # Show available projects for debugging
+        all_projects = db.query(Project).all()
+        print(f"Available projects: {[(p.name, p.provider_id) for p in all_projects]}")
         raise HTTPException(status_code=404, detail="Project not found")
     
-    # Get the prod prompt for this project
+    print(f"Found project: {project.name}, git_repo: {project.git_repo_url}")
+    
+    # If project has git repo, try to get from git first
+    if project.git_repo_url:
+        user = db.query(User).first()
+        if user:
+            try:
+                token = git_service.decrypt_token(user.git_access_token)
+                prod_prompt = git_service.get_prod_prompt_from_git(
+                    user.git_platform,
+                    token,
+                    project.git_repo_url,
+                    project.name,
+                    project.provider_id
+                )
+                
+                if prod_prompt:
+                    return LatestPromptResponse(
+                        userPrompt=prod_prompt.user_prompt,
+                        systemPrompt=prod_prompt.system_prompt,
+                        temperature=prod_prompt.temperature,
+                        maxLen=prod_prompt.max_len,
+                        topP=prod_prompt.top_p,
+                        topK=prod_prompt.top_k,
+                        variables=prod_prompt.variables,
+                        is_prod=True
+                    )
+            except Exception as e:
+                print(f"Failed to get prod prompt from git: {e}")
+                # Fall through to database lookup
+    
+    # Fallback: Get from database (for projects without git or when git fails)
     prod_history = db.query(PromptHistory).filter(
         PromptHistory.project_id == project.id,
         PromptHistory.is_prod == True
@@ -525,6 +603,343 @@ async def get_latest_prompt(
         variables=variables,
         is_prod=latest_history.is_prod
     )
+
+# Git authentication endpoints
+@app.post("/api/git/auth", response_model=UserResponse, tags=["Git"])
+async def authenticate_git(auth_request: GitAuthRequest, db: Session = Depends(get_db)):
+    """Authenticate with git platform and store credentials"""
+    # Test the credentials first
+    test_repo = "https://github.com/octocat/Hello-World"  # Public repo for testing
+    if not git_service.test_git_access(auth_request.platform, auth_request.username, auth_request.access_token, test_repo):
+        raise HTTPException(status_code=401, detail="Invalid git credentials")
+    
+    # Check if user already exists
+    existing_user = db.query(User).filter(
+        User.git_platform == auth_request.platform,
+        User.git_username == auth_request.username
+    ).first()
+    
+    if existing_user:
+        # Update existing user
+        existing_user.git_access_token = git_service.encrypt_token(auth_request.access_token)
+        db.commit()
+        db.refresh(existing_user)
+        return existing_user
+    else:
+        # Create new user
+        encrypted_token = git_service.encrypt_token(auth_request.access_token)
+        db_user = User(
+            git_platform=auth_request.platform,
+            git_username=auth_request.username,
+            git_access_token=encrypted_token
+        )
+        db.add(db_user)
+        db.commit()
+        db.refresh(db_user)
+        return db_user
+
+@app.get("/api/git/user", response_model=UserResponse, tags=["Git"])
+async def get_current_git_user(db: Session = Depends(get_db)):
+    """Get current authenticated git user"""
+    user = db.query(User).first()  # In production, get from session
+    if not user:
+        raise HTTPException(status_code=404, detail="No authenticated git user found")
+    return user
+
+@app.post("/api/projects/{project_id}/git/test-access", tags=["Git"])
+async def test_git_repo_access(project_id: int, db: Session = Depends(get_db)):
+    """Test if current user has access to project's git repository"""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if not project.git_repo_url:
+        raise HTTPException(status_code=400, detail="Project has no git repository configured")
+    
+    user = db.query(User).first()  # In production, get from session
+    if not user:
+        raise HTTPException(status_code=404, detail="No authenticated git user found")
+    
+    try:
+        token = git_service.decrypt_token(user.git_access_token)
+        has_access = git_service.test_git_access(user.git_platform, user.git_username, token, project.git_repo_url)
+        
+        if not has_access:
+            raise HTTPException(status_code=403, detail="No access to git repository")
+        
+        return {"message": "Git repository access confirmed"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to test git access: {str(e)}")
+
+@app.post("/api/projects/{project_id}/history/{history_id}/tag-prod", tags=["Git"])
+async def tag_prompt_as_prod(
+    project_id: int,
+    history_id: int,
+    db: Session = Depends(get_db)
+):
+    """Tag a prompt as production - creates git PR instead of direct database update"""
+    
+    # Get project and history
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    history_item = db.query(PromptHistory).filter(
+        PromptHistory.id == history_id,
+        PromptHistory.project_id == project_id
+    ).first()
+    if not history_item:
+        raise HTTPException(status_code=404, detail="History item not found")
+    
+    # Check if project has git repo
+    if not project.git_repo_url:
+        raise HTTPException(status_code=400, detail="Project has no git repository configured")
+    
+    # Get current user
+    user = db.query(User).first()  # In production, get from session
+    if not user:
+        raise HTTPException(status_code=404, detail="No authenticated git user found")
+    
+    try:
+        # Prepare prompt data
+        variables = None
+        if history_item.variables:
+            try:
+                variables = json.loads(history_item.variables)
+            except:
+                variables = None
+        
+        prompt_data = ProdPromptData(
+            user_prompt=history_item.user_prompt,
+            system_prompt=history_item.system_prompt,
+            temperature=history_item.temperature,
+            max_len=history_item.max_len,
+            top_p=history_item.top_p,
+            top_k=history_item.top_k,
+            variables=variables,
+            created_at=history_item.created_at.isoformat()
+        )
+        
+        # Create PR
+        token = git_service.decrypt_token(user.git_access_token)
+        pr_result = git_service.create_prompt_pr(
+            user.git_platform,
+            token,
+            project.git_repo_url,
+            project.name,
+            project.provider_id,
+            prompt_data
+        )
+        
+        if not pr_result:
+            raise HTTPException(status_code=500, detail="Failed to create pull request")
+        
+        # Save PR info to database
+        pending_pr = PendingPR(
+            project_id=project_id,
+            prompt_history_id=history_id,
+            pr_url=pr_result['pr_url'],
+            pr_number=pr_result['pr_number'],
+            is_merged=False
+        )
+        db.add(pending_pr)
+        db.commit()
+        
+        return {
+            "message": "Pull request created successfully",
+            "pr_url": pr_result['pr_url'],
+            "pr_number": pr_result['pr_number']
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create production PR: {str(e)}")
+
+@app.get("/api/projects/{project_id}/pending-prs", response_model=List[PendingPRResponse], tags=["Git"])
+async def get_pending_prs(project_id: int, db: Session = Depends(get_db)):
+    """Get pending pull requests for a project - checks live status from git"""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if not project.git_repo_url:
+        return []
+    
+    user = db.query(User).first()
+    if not user:
+        return []
+    
+    try:
+        token = git_service.decrypt_token(user.git_access_token)
+        
+        # Get all PRs for this project from database
+        all_prs = db.query(PendingPR).filter(
+            PendingPR.project_id == project_id
+        ).order_by(PendingPR.created_at.desc()).all()
+        
+        pending_prs = []
+        for pr in all_prs:
+            # Check live status from git
+            status = git_service.check_pr_status(
+                user.git_platform,
+                token,
+                project.git_repo_url,
+                pr.pr_number
+            )
+            
+            # Only include if still open/pending
+            if status == 'open':
+                pending_prs.append(pr)
+            # Update database status if changed
+            elif status in ['merged', 'closed'] and not pr.is_merged:
+                pr.is_merged = True
+        
+        db.commit()
+        return pending_prs
+        
+    except Exception as e:
+        print(f"Failed to check pending PRs: {e}")
+        return []
+
+@app.post("/api/projects/{project_id}/sync-prs", tags=["Git"])
+async def sync_pr_status(project_id: int, db: Session = Depends(get_db)):
+    """Sync PR statuses and mark merged/closed PRs as resolved"""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if not project.git_repo_url:
+        return {"message": "Project has no git repository configured"}
+    
+    user = db.query(User).first()
+    if not user:
+        return {"message": "No authenticated git user found"}
+    
+    try:
+        token = git_service.decrypt_token(user.git_access_token)
+        pending_prs = db.query(PendingPR).filter(
+            PendingPR.project_id == project_id,
+            PendingPR.is_merged == False
+        ).all()
+        
+        print(f"Found {len(pending_prs)} pending PRs to check")
+        
+        updated_count = 0
+        for pr in pending_prs:
+            print(f"Checking PR #{pr.pr_number} status...")
+            status = git_service.check_pr_status(
+                user.git_platform,
+                token,
+                project.git_repo_url,
+                pr.pr_number
+            )
+            print(f"PR #{pr.pr_number} status: {status}")
+            
+            if status in ['merged', 'closed']:
+                pr.is_merged = True
+                updated_count += 1
+                print(f"Marked PR #{pr.pr_number} as merged")
+        
+        db.commit()
+        return {"message": f"Synced {updated_count} PR statuses"}
+        
+    except Exception as e:
+        print(f"Sync PR error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to sync PR statuses: {str(e)}")
+
+@app.get("/api/projects/{project_id}/prod-history", response_model=List[PromptHistoryResponse], tags=["Git"])
+async def get_prod_history_from_git(project_id: int, db: Session = Depends(get_db)):
+    """Get production prompt history from git repository showing all changes to the prompt file"""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if not project.git_repo_url:
+        return []  # No git repo, return empty history
+    
+    user = db.query(User).first()  # In production, get from session
+    if not user:
+        return []  # No authenticated user, return empty history
+    
+    history_items = []
+    
+    try:
+        token = git_service.decrypt_token(user.git_access_token)
+        
+        # Get git commit history for the production prompt file
+        file_path = f"{project.name}/{project.provider_id}/prompt_prod.json"
+        print(f"Getting commit history for file: {file_path}")
+        
+        commits = git_service.get_file_commit_history(
+            user.git_platform,
+            token,
+            project.git_repo_url,
+            file_path,
+            limit=20
+        )
+        
+        print(f"Found {len(commits)} commits for production prompt file")
+        
+        # Convert each commit to PromptHistoryResponse
+        for i, commit in enumerate(commits):
+            try:
+                # Get the prompt content at this commit
+                prompt_data = git_service.get_file_content_at_commit(
+                    user.git_platform,
+                    token,
+                    project.git_repo_url,
+                    file_path,
+                    commit['sha']
+                )
+                
+                if prompt_data:
+                    # Determine commit type from message
+                    commit_msg = commit['message']
+                    if "🚀" in commit_msg or "Update production prompt" in commit_msg:
+                        notes = f"🚀 PR merge: {commit_msg[:80]}{'...' if len(commit_msg) > 80 else ''}"
+                        commit_type = "pr"
+                    elif "✨" in commit_msg or "Initialize project" in commit_msg:
+                        notes = f"✨ Project setup: {commit_msg[:80]}{'...' if len(commit_msg) > 80 else ''}"
+                        commit_type = "init"
+                    else:
+                        notes = f"📝 Direct commit: {commit_msg[:80]}{'...' if len(commit_msg) > 80 else ''}"
+                        commit_type = "direct"
+                    
+                    # Add current badge to the most recent commit
+                    if i == 0:
+                        notes = f"⚡ CURRENT - {notes}"
+                    
+                    commit_response = PromptHistoryResponse(
+                        id=hash(commit['sha']) % 100000,  # Generate consistent ID from commit SHA
+                        project_id=project_id,
+                        user_prompt=prompt_data.user_prompt,
+                        system_prompt=prompt_data.system_prompt,
+                        variables=prompt_data.variables,
+                        temperature=prompt_data.temperature,
+                        max_len=prompt_data.max_len,
+                        top_p=prompt_data.top_p,
+                        top_k=prompt_data.top_k,
+                        response=None,
+                        rating=None,
+                        notes=notes,
+                        is_prod=True,
+                        created_at=commit['date']
+                    )
+                    history_items.append(commit_response)
+                    
+            except Exception as e:
+                print(f"Failed to get content for commit {commit['sha']}: {e}")
+                continue
+        
+        print(f"Successfully processed {len(history_items)} commits into history items")
+        return history_items
+            
+    except Exception as e:
+        print(f"Failed to get prod history from git: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
 
 @app.get("/", tags=["Documentation"])
 async def root():

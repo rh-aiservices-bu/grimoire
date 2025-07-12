@@ -3,6 +3,7 @@ export interface Project {
   name: string;
   llamastack_url: string;
   provider_id: string;
+  git_repo_url?: string;
   created_at: string;
 }
 
@@ -28,4 +29,21 @@ export interface ModelParameters {
   max_len: number;
   top_p: number;
   top_k: number;
+}
+
+export interface GitUser {
+  id: number;
+  git_platform: string;
+  git_username: string;
+  created_at: string;
+}
+
+export interface PendingPR {
+  id: number;
+  project_id: number;
+  prompt_history_id: number;
+  pr_url: string;
+  pr_number: number;
+  is_merged: boolean;
+  created_at: string;
 }

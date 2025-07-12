@@ -19,7 +19,7 @@ import {
   SplitItem,
   NumberInput,
 } from '@patternfly/react-core';
-import { Project, PromptHistory, ModelParameters } from '../types';
+import { Project, PromptHistory, ModelParameters, GitUser } from '../types';
 import { api } from '../api';
 import { HistoryLog } from './HistoryLog';
 import { ProjectEditModal } from './ProjectEditModal';
@@ -34,6 +34,15 @@ interface PromptExperimentViewProps {
   onProjectSelect?: (project: Project) => void;
   allProjects?: Project[];
   onCreateNew?: () => void;
+  gitUser?: GitUser | null;
+  onGitAuth?: () => void;
+  onNotification?: (notification: {
+    title: string;
+    variant: 'success' | 'danger' | 'warning' | 'info';
+    message?: string;
+    actionLinks?: Array<{ text: string; url: string }>;
+    actionButton?: { text: string; onClick: () => void };
+  }) => void;
 }
 
 export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
@@ -44,6 +53,9 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
   onProjectSelect,
   allProjects = [],
   onCreateNew,
+  gitUser,
+  onGitAuth,
+  onNotification,
 }) => {
   const [userPrompt, setUserPrompt] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
@@ -528,7 +540,15 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
             minWidth: '350px',
             maxWidth: '400px'
           }}>
-            <HistoryLog history={history} onHistoryUpdate={loadHistory} />
+            <HistoryLog 
+              history={history} 
+              onHistoryUpdate={loadHistory} 
+              projectId={project.id}
+              hasGitRepo={!!project.git_repo_url}
+              gitUser={gitUser}
+              onGitAuth={onGitAuth}
+              onNotification={onNotification}
+            />
           </div>
         </div>
       </PageSection>
