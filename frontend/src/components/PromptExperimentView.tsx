@@ -326,14 +326,14 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
           gap: '0.5rem', 
           width: '100%',
           minHeight: 'calc(100vh - 200px)',
-          flexWrap: 'nowrap',
+          flexWrap: 'wrap',
           margin: 0,
           padding: 0
         }}>
           {/* Projects Sidebar */}
           <div style={{ 
             flex: '0 0 280px',
-            minWidth: '280px',
+            minWidth: '200px',
             maxWidth: '300px'
           }}>
             <Card>
@@ -672,7 +672,7 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
           {/* History Log Section */}
           <div style={{ 
             flex: '0 0 350px',
-            minWidth: '350px',
+            minWidth: '200px',
             maxWidth: '400px',
             height: '100%',
             overflow: 'hidden'

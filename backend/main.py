@@ -1,26 +1,31 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 import json
 import re
 import asyncio
 import threading
 import queue
-from datetime import datetime
+import hashlib
+import secrets
+from datetime import datetime, timedelta
 
 from llama_stack_client import LlamaStackClient
 from llama_stack_client.lib.inference.event_logger import EventLogger
 
 from database import get_db
-from models import Project, PromptHistory, User, PendingPR, GitCommitCache
+from models import Project, PromptHistory, User, PendingPR, GitCommitCache, AppUser, UserSession, ProjectCollaborator
 from schemas import (
     ProjectCreate, ProjectUpdate, ProjectResponse, 
     PromptHistoryCreate, PromptHistoryResponse, PromptHistoryUpdate,
     GenerateRequest, GenerateResponse, LatestPromptResponse,
     ProjectSummary, ProjectsModelsResponse, UserCreate, UserResponse,
-    PendingPRResponse, GitAuthRequest, ProdPromptData
+    PendingPRResponse, GitAuthRequest, ProdPromptData,
+    AppUserCreate, AppUserLogin, AppUserResponse, UserSessionResponse,
+    ProjectCollaboratorCreate, ProjectCollaboratorResponse, ProjectWithCollaboratorsResponse
 )
 from git_service import GitService
 
@@ -76,6 +81,76 @@ app.add_middleware(
 # Initialize Git Service
 git_service = GitService()
 
+# Authentication utilities
+def hash_password(password: str) -> str:
+    """Hash a password using SHA-256"""
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def verify_password(password: str, hashed_password: str) -> bool:
+    """Verify a password against its hash"""
+    return hash_password(password) == hashed_password
+
+def generate_session_token() -> str:
+    """Generate a secure session token"""
+    return secrets.token_urlsafe(32)
+
+def get_current_user(authorization: Optional[str] = Header(None), db: Session = Depends(get_db)) -> Optional[AppUser]:
+    """Get current authenticated user from session token"""
+    if not authorization:
+        return None
+    
+    try:
+        # Extract token from "Bearer <token>" format
+        token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
+        
+        # Find active session
+        session = db.query(UserSession).filter(
+            UserSession.session_token == token,
+            UserSession.expires_at > datetime.utcnow()
+        ).first()
+        
+        if not session:
+            return None
+            
+        return session.user
+    except Exception:
+        return None
+
+def require_auth(current_user: Optional[AppUser] = Depends(get_current_user)) -> AppUser:
+    """Require authentication for an endpoint"""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return current_user
+
+def check_project_access(project_id: int, user: AppUser, db: Session, required_role: str = "viewer") -> Project:
+    """Check if user has access to a project"""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Check if user is owner
+    if project.owner_id == user.id:
+        return project
+    
+    # Check if user is collaborator with required role
+    collaborator = db.query(ProjectCollaborator).filter(
+        ProjectCollaborator.project_id == project_id,
+        ProjectCollaborator.user_id == user.id
+    ).first()
+    
+    if not collaborator:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Role hierarchy: owner > editor > viewer
+    role_hierarchy = {"viewer": 0, "editor": 1, "owner": 2}
+    user_level = role_hierarchy.get(collaborator.role, 0)
+    required_level = role_hierarchy.get(required_role, 0)
+    
+    if user_level < required_level:
+        raise HTTPException(status_code=403, detail=f"Insufficient permissions. Required: {required_role}")
+    
+    return project
+
 def process_template_variables(text: str, variables: dict) -> str:
     """Process template variables in text"""
     if not variables:
@@ -87,19 +162,156 @@ def process_template_variables(text: str, variables: dict) -> str:
     
     return text
 
+# Authentication endpoints
+@app.post("/api/auth/register", response_model=UserSessionResponse, tags=["Authentication"])
+async def register_user(user_data: AppUserCreate, db: Session = Depends(get_db)):
+    """Register a new user"""
+    # Check if user already exists
+    existing_user = db.query(AppUser).filter(AppUser.email == user_data.email).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # Create new user
+    hashed_password = hash_password(user_data.password)
+    new_user = AppUser(
+        email=user_data.email,
+        name=user_data.name,
+        password_hash=hashed_password
+    )
+    
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
+    # Create session
+    session_token = generate_session_token()
+    expires_at = datetime.utcnow() + timedelta(days=30)  # 30 day sessions
+    
+    session = UserSession(
+        user_id=new_user.id,
+        session_token=session_token,
+        expires_at=expires_at
+    )
+    
+    db.add(session)
+    db.commit()
+    
+    return UserSessionResponse(
+        session_token=session_token,
+        user=AppUserResponse.model_validate(new_user),
+        expires_at=expires_at
+    )
+
+@app.post("/api/auth/login", response_model=UserSessionResponse, tags=["Authentication"])
+async def login_user(login_data: AppUserLogin, db: Session = Depends(get_db)):
+    """Login user"""
+    user = db.query(AppUser).filter(AppUser.email == login_data.email).first()
+    if not user or not verify_password(login_data.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    if not user.is_active:
+        raise HTTPException(status_code=401, detail="Account is disabled")
+    
+    # Clean up old sessions
+    db.query(UserSession).filter(
+        UserSession.user_id == user.id,
+        UserSession.expires_at <= datetime.utcnow()
+    ).delete()
+    
+    # Create new session
+    session_token = generate_session_token()
+    expires_at = datetime.utcnow() + timedelta(days=30)
+    
+    session = UserSession(
+        user_id=user.id,
+        session_token=session_token,
+        expires_at=expires_at
+    )
+    
+    db.add(session)
+    db.commit()
+    
+    return UserSessionResponse(
+        session_token=session_token,
+        user=AppUserResponse.model_validate(user),
+        expires_at=expires_at
+    )
+
+@app.post("/api/auth/logout", tags=["Authentication"])
+async def logout_user(current_user: AppUser = Depends(require_auth), authorization: str = Header(...), db: Session = Depends(get_db)):
+    """Logout user (invalidate session)"""
+    token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
+    
+    # Delete the session
+    db.query(UserSession).filter(UserSession.session_token == token).delete()
+    db.commit()
+    
+    return {"message": "Logged out successfully"}
+
+@app.get("/api/auth/me", response_model=AppUserResponse, tags=["Authentication"])
+async def get_current_user_info(current_user: AppUser = Depends(require_auth)):
+    """Get current user information"""
+    return AppUserResponse.model_validate(current_user)
+
 # Projects endpoints
-@app.get("/api/projects", response_model=List[ProjectResponse], tags=["Projects"])
-async def get_projects(db: Session = Depends(get_db)):
-    projects = db.query(Project).order_by(Project.created_at.desc()).all()
-    return projects
+@app.get("/api/projects", response_model=List[ProjectWithCollaboratorsResponse], tags=["Projects"])
+async def get_projects(current_user: Optional[AppUser] = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get projects - returns all if not authenticated, or user's projects if authenticated"""
+    if current_user:
+        # Return projects owned by user or shared with user
+        owned_projects = db.query(Project).filter(Project.owner_id == current_user.id).all()
+        
+        shared_project_ids = db.query(ProjectCollaborator.project_id).filter(
+            ProjectCollaborator.user_id == current_user.id
+        ).subquery()
+        
+        shared_projects = db.query(Project).filter(
+            Project.id.in_(shared_project_ids)
+        ).all()
+        
+        all_projects = list(set(owned_projects + shared_projects))
+        
+        # Build response with collaborator info
+        projects_with_collaborators = []
+        for project in all_projects:
+            collaborators = db.query(ProjectCollaborator).filter(
+                ProjectCollaborator.project_id == project.id
+            ).all()
+            
+            projects_with_collaborators.append(ProjectWithCollaboratorsResponse(
+                id=project.id,
+                name=project.name,
+                llamastack_url=project.llamastack_url,
+                provider_id=project.provider_id,
+                git_repo_url=project.git_repo_url,
+                owner=AppUserResponse.model_validate(project.owner) if project.owner else None,
+                collaborators=[ProjectCollaboratorResponse.model_validate(c) for c in collaborators],
+                created_at=project.created_at
+            ))
+        
+        return projects_with_collaborators
+    else:
+        # Return all projects (legacy behavior for non-authenticated users)
+        projects = db.query(Project).order_by(Project.created_at.desc()).all()
+        return [ProjectWithCollaboratorsResponse(
+            id=p.id,
+            name=p.name,
+            llamastack_url=p.llamastack_url,
+            provider_id=p.provider_id,
+            git_repo_url=p.git_repo_url,
+            owner=AppUserResponse.model_validate(p.owner) if p.owner else None,
+            collaborators=[],
+            created_at=p.created_at
+        ) for p in projects]
 
 @app.post("/api/projects", response_model=ProjectResponse, tags=["Projects"])
-async def create_project(project: ProjectCreate, db: Session = Depends(get_db)):
+async def create_project(project: ProjectCreate, current_user: Optional[AppUser] = Depends(get_current_user), db: Session = Depends(get_db)):
     db_project = Project(
         name=project.name,
         llamastack_url=project.llamastackUrl,
         provider_id=project.providerId,
-        git_repo_url=project.gitRepoUrl
+        git_repo_url=project.gitRepoUrl,
+        owner_id=current_user.id if current_user else None
     )
     db.add(db_project)
     db.commit()
@@ -173,6 +385,118 @@ async def delete_project(project_id: int, db: Session = Depends(get_db)):
     db.commit()
     
     return {"message": "Project deleted successfully"}
+
+# Project Sharing endpoints
+@app.post("/api/projects/{project_id}/collaborators", response_model=ProjectCollaboratorResponse, tags=["Project Sharing"])
+async def add_project_collaborator(
+    project_id: int, 
+    collaborator_data: ProjectCollaboratorCreate,
+    current_user: AppUser = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    """Add a collaborator to a project"""
+    # Check if current user owns the project or is an editor
+    project = check_project_access(project_id, current_user, db, required_role="editor")
+    
+    # Find the user to be added
+    target_user = db.query(AppUser).filter(AppUser.email == collaborator_data.email).first()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found with that email")
+    
+    # Check if already a collaborator
+    existing = db.query(ProjectCollaborator).filter(
+        ProjectCollaborator.project_id == project_id,
+        ProjectCollaborator.user_id == target_user.id
+    ).first()
+    
+    if existing:
+        raise HTTPException(status_code=400, detail="User is already a collaborator")
+    
+    # Add collaborator
+    collaborator = ProjectCollaborator(
+        project_id=project_id,
+        user_id=target_user.id,
+        role=collaborator_data.role
+    )
+    
+    db.add(collaborator)
+    db.commit()
+    db.refresh(collaborator)
+    
+    return ProjectCollaboratorResponse.model_validate(collaborator)
+
+@app.get("/api/projects/{project_id}/collaborators", response_model=List[ProjectCollaboratorResponse], tags=["Project Sharing"])
+async def get_project_collaborators(
+    project_id: int,
+    current_user: AppUser = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    """Get all collaborators for a project"""
+    # Check access to project
+    check_project_access(project_id, current_user, db, required_role="viewer")
+    
+    collaborators = db.query(ProjectCollaborator).filter(
+        ProjectCollaborator.project_id == project_id
+    ).all()
+    
+    return [ProjectCollaboratorResponse.model_validate(c) for c in collaborators]
+
+@app.delete("/api/projects/{project_id}/collaborators/{collaborator_id}", tags=["Project Sharing"])
+async def remove_project_collaborator(
+    project_id: int,
+    collaborator_id: int,
+    current_user: AppUser = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    """Remove a collaborator from a project"""
+    # Check if current user owns the project or is an editor
+    check_project_access(project_id, current_user, db, required_role="editor")
+    
+    # Find and delete collaborator
+    collaborator = db.query(ProjectCollaborator).filter(
+        ProjectCollaborator.id == collaborator_id,
+        ProjectCollaborator.project_id == project_id
+    ).first()
+    
+    if not collaborator:
+        raise HTTPException(status_code=404, detail="Collaborator not found")
+    
+    db.delete(collaborator)
+    db.commit()
+    
+    return {"message": "Collaborator removed successfully"}
+
+@app.put("/api/projects/{project_id}/collaborators/{collaborator_id}/role", response_model=ProjectCollaboratorResponse, tags=["Project Sharing"])
+async def update_collaborator_role(
+    project_id: int,
+    collaborator_id: int,
+    role_data: dict,
+    current_user: AppUser = Depends(require_auth),
+    db: Session = Depends(get_db)
+):
+    """Update a collaborator's role"""
+    # Check if current user owns the project
+    project = check_project_access(project_id, current_user, db, required_role="owner")
+    
+    # Find collaborator
+    collaborator = db.query(ProjectCollaborator).filter(
+        ProjectCollaborator.id == collaborator_id,
+        ProjectCollaborator.project_id == project_id
+    ).first()
+    
+    if not collaborator:
+        raise HTTPException(status_code=404, detail="Collaborator not found")
+    
+    # Update role
+    new_role = role_data.get("role")
+    if new_role not in ["viewer", "editor", "owner"]:
+        raise HTTPException(status_code=400, detail="Invalid role")
+    
+    collaborator.role = new_role
+    db.commit()
+    db.refresh(collaborator)
+    
+    return ProjectCollaboratorResponse.model_validate(collaborator)
 
 # Prompt history endpoints
 @app.get("/api/projects/{project_id}/history", response_model=List[PromptHistoryResponse], tags=["History"])
@@ -685,6 +1009,14 @@ async def authenticate_git(auth_request: GitAuthRequest, db: Session = Depends(g
             # Continue with other projects even if one fails
     
     print(f"Initial git sync completed for {len(projects_with_git)} projects")
+    return user
+
+@app.get("/api/git/user", response_model=UserResponse, tags=["Git"])
+async def get_current_git_user(db: Session = Depends(get_db)):
+    """Get the most recently authenticated git user"""
+    user = db.query(User).order_by(User.created_at.desc()).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="No git user authenticated")
     return user
 
 @app.post("/api/git/sync-all", tags=["Git"])

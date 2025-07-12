@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 
@@ -131,3 +131,56 @@ class ProdPromptData(BaseModel):
     top_k: Optional[int] = None
     variables: Optional[Dict[str, str]] = None
     created_at: str
+
+# App User Authentication Schemas
+class AppUserCreate(BaseModel):
+    email: EmailStr
+    name: str
+    password: str
+
+class AppUserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+class AppUserResponse(BaseModel):
+    id: int
+    email: str
+    name: str
+    is_active: bool
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+class UserSessionResponse(BaseModel):
+    session_token: str
+    user: AppUserResponse
+    expires_at: datetime
+
+# Project Sharing Schemas
+class ProjectCollaboratorCreate(BaseModel):
+    email: EmailStr
+    role: str = "viewer"  # owner, editor, viewer
+
+class ProjectCollaboratorResponse(BaseModel):
+    id: int
+    project_id: int
+    user: AppUserResponse
+    role: str
+    invited_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+class ProjectWithCollaboratorsResponse(BaseModel):
+    id: int
+    name: str
+    llamastack_url: str
+    provider_id: str
+    git_repo_url: Optional[str] = None
+    owner: Optional[AppUserResponse] = None
+    collaborators: List[ProjectCollaboratorResponse] = []
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True

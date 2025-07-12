@@ -1,7 +1,42 @@
 import axios from 'axios';
-import { Project, PromptHistory, GitUser, PendingPR } from './types';
+import { Project, PromptHistory, GitUser, PendingPR, AppUser, UserSession, ProjectCollaborator } from './types';
 
 const API_BASE = `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/api`;
+
+// Auth token management
+let authToken: string | null = localStorage.getItem('auth_token');
+
+// Set up axios interceptor to include auth token
+axios.interceptors.request.use((config) => {
+  if (authToken) {
+    config.headers.Authorization = `Bearer ${authToken}`;
+  }
+  return config;
+});
+
+// Set up axios interceptor to handle auth errors
+axios.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Clear invalid token
+      authToken = null;
+      localStorage.removeItem('auth_token');
+      // Optionally redirect to login
+      window.dispatchEvent(new Event('auth-logout'));
+    }
+    return Promise.reject(error);
+  }
+);
+
+export const setAuthToken = (token: string | null) => {
+  authToken = token;
+  if (token) {
+    localStorage.setItem('auth_token', token);
+  } else {
+    localStorage.removeItem('auth_token');
+  }
+};
 
 export const api = {
   // Projects
@@ -169,7 +204,7 @@ export const api = {
       const response = await axios.get(`${API_BASE}/git/user`);
       return response.data;
     } catch (error) {
-      // Return null if no user is authenticated (404 is expected)
+      // Return null if no git user is authenticated (404 is expected)
       return null;
     }
   },
@@ -200,6 +235,64 @@ export const api = {
 
   syncPRStatus: async (projectId: number): Promise<{ message: string }> => {
     const response = await axios.post(`${API_BASE}/projects/${projectId}/sync-prs`);
+    return response.data;
+  },
+
+  // Authentication
+  register: async (data: {
+    email: string;
+    name: string;
+    password: string;
+  }): Promise<UserSession> => {
+    const response = await axios.post(`${API_BASE}/auth/register`, data);
+    const session = response.data;
+    setAuthToken(session.session_token);
+    return session;
+  },
+
+  login: async (data: {
+    email: string;
+    password: string;
+  }): Promise<UserSession> => {
+    const response = await axios.post(`${API_BASE}/auth/login`, data);
+    const session = response.data;
+    setAuthToken(session.session_token);
+    return session;
+  },
+
+  logout: async (): Promise<void> => {
+    try {
+      await axios.post(`${API_BASE}/auth/logout`);
+    } finally {
+      setAuthToken(null);
+    }
+  },
+
+  getCurrentUser: async (): Promise<AppUser> => {
+    const response = await axios.get(`${API_BASE}/auth/me`);
+    return response.data;
+  },
+
+  // Project Collaboration
+  addCollaborator: async (projectId: number, data: {
+    email: string;
+    role: 'owner' | 'editor' | 'viewer';
+  }): Promise<ProjectCollaborator> => {
+    const response = await axios.post(`${API_BASE}/projects/${projectId}/collaborators`, data);
+    return response.data;
+  },
+
+  getCollaborators: async (projectId: number): Promise<ProjectCollaborator[]> => {
+    const response = await axios.get(`${API_BASE}/projects/${projectId}/collaborators`);
+    return response.data;
+  },
+
+  removeCollaborator: async (projectId: number, collaboratorId: number): Promise<void> => {
+    await axios.delete(`${API_BASE}/projects/${projectId}/collaborators/${collaboratorId}`);
+  },
+
+  updateCollaboratorRole: async (projectId: number, collaboratorId: number, role: string): Promise<ProjectCollaborator> => {
+    const response = await axios.put(`${API_BASE}/projects/${projectId}/collaborators/${collaboratorId}/role`, { role });
     return response.data;
   },
 };

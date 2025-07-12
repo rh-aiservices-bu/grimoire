@@ -8,15 +8,29 @@ import {
   AlertGroup,
   AlertActionCloseButton,
   Button,
+  Masthead,
+  MastheadToggle,
+  MastheadMain,
+  MastheadBrand,
+  MastheadContent,
+  Brand,
+  Toolbar,
+  ToolbarContent,
+  ToolbarItem,
 } from '@patternfly/react-core';
-import { Project, GitUser } from './types';
+import { Project, GitUser, UserSession } from './types';
 import { api } from './api';
 import { ProjectList } from './components/ProjectList';
 import { ProjectModal } from './components/ProjectModal';
 import { PromptExperimentView } from './components/PromptExperimentView';
 import { GitAuthModal } from './components/GitAuthModal';
+import { AuthModal } from './components/AuthModal';
+import { UserMenu } from './components/UserMenu';
+import { ProjectSharingModal } from './components/ProjectSharingModal';
+import { useAuth } from './contexts/AuthContext';
 
 function App() {
+  const { user, loading: authLoading, login, logout } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -24,6 +38,9 @@ function App() {
   const [error, setError] = useState('');
   const [gitUser, setGitUser] = useState<GitUser | null>(null);
   const [isGitAuthModalOpen, setIsGitAuthModalOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isSharingModalOpen, setIsSharingModalOpen] = useState(false);
+  const [sharingProject, setSharingProject] = useState<Project | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [notifications, setNotifications] = useState<Array<{
     id: string;
@@ -35,9 +52,11 @@ function App() {
   }>>([]);
 
   useEffect(() => {
-    loadProjects();
-    loadGitUser();
-  }, []);
+    if (!authLoading) {
+      loadProjects();
+      loadGitUser();
+    }
+  }, [authLoading]);
 
   const loadGitUser = async () => {
     try {
@@ -64,6 +83,45 @@ function App() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleAuthenticated = (session: UserSession) => {
+    login(session);
+    addNotification({
+      id: Date.now().toString(),
+      title: 'Welcome!',
+      variant: 'success',
+      message: `Successfully logged in as ${session.user.name}`,
+    });
+    // Refresh projects to see user-specific data
+    loadProjects();
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    addNotification({
+      id: Date.now().toString(),
+      title: 'Logged out',
+      variant: 'info',
+      message: 'You have been successfully logged out',
+    });
+    // Refresh projects to see public data
+    loadProjects();
+  };
+
+  const handleShareProject = (project: Project) => {
+    setSharingProject(project);
+    setIsSharingModalOpen(true);
+  };
+
+  const handleSharingModalClose = () => {
+    setIsSharingModalOpen(false);
+    setSharingProject(null);
+  };
+
+  const handleProjectUpdated = () => {
+    // Refresh projects when sharing is updated
+    loadProjects();
   };
 
   const handleCreateProject = async (data: {
@@ -154,6 +212,35 @@ function App() {
     );
   }
 
+  const masthead = (
+    <Masthead>
+      <MastheadMain>
+        <MastheadBrand>
+          <Brand alt="Prompt Experimentation Tool">
+            Prompt Experimentation Tool
+          </Brand>
+        </MastheadBrand>
+      </MastheadMain>
+      <MastheadContent>
+        <Toolbar id="toolbar">
+          <ToolbarContent>
+            {user ? (
+              <ToolbarItem>
+                <UserMenu user={user} onLogout={handleLogout} />
+              </ToolbarItem>
+            ) : (
+              <ToolbarItem>
+                <Button variant="primary" onClick={() => setIsAuthModalOpen(true)}>
+                  Sign In
+                </Button>
+              </ToolbarItem>
+            )}
+          </ToolbarContent>
+        </Toolbar>
+      </MastheadContent>
+    </Masthead>
+  );
+
   // Render the modals so they're always available
   const modals = (
     <>
@@ -168,6 +255,20 @@ function App() {
         onSubmit={handleGitAuth}
         isAuthenticating={isAuthenticating}
       />
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onAuthenticated={handleAuthenticated}
+      />
+      {sharingProject && user && (
+        <ProjectSharingModal
+          isOpen={isSharingModalOpen}
+          onClose={handleSharingModalClose}
+          project={sharingProject}
+          currentUser={user}
+          onProjectUpdated={handleProjectUpdated}
+        />
+      )}
     </>
   );
 
@@ -175,18 +276,20 @@ function App() {
   if (selectedProject && projects.length > 0) {
     return (
       <>
-        <PromptExperimentView
-          project={selectedProject}
-          onBack={handleBackToProjects}
-          onProjectUpdate={handleProjectUpdate}
-          onProjectDelete={handleProjectDelete}
-          onProjectSelect={handleSelectProject}
-          allProjects={projects}
-          onCreateNew={() => setIsModalOpen(true)}
-          gitUser={gitUser}
-          onGitAuth={() => setIsGitAuthModalOpen(true)}
-          onNotification={addNotification}
-        />
+        <Page masthead={masthead}>
+          <PromptExperimentView
+            project={selectedProject}
+            onBack={handleBackToProjects}
+            onProjectUpdate={handleProjectUpdate}
+            onProjectDelete={handleProjectDelete}
+            onProjectSelect={handleSelectProject}
+            allProjects={projects}
+            onCreateNew={() => setIsModalOpen(true)}
+            gitUser={gitUser}
+            onGitAuth={() => setIsGitAuthModalOpen(true)}
+            onNotification={addNotification}
+          />
+        </Page>
         <AlertGroup isToast isLiveRegion>
           {notifications.map(notification => (
             <Alert
@@ -223,14 +326,34 @@ function App() {
     );
   }
 
+  // Show loading spinner while authentication is loading
+  if (authLoading) {
+    return (
+      <>
+        <Page masthead={masthead}>
+          <PageSection style={{ textAlign: 'center', padding: '4rem' }}>
+            <Spinner size="xl" />
+            <p style={{ marginTop: '1rem' }}>Loading...</p>
+          </PageSection>
+        </Page>
+        {modals}
+      </>
+    );
+  }
+
   // Show project creation/list page only if no projects exist
   return (
     <>
-      <Page>
+      <Page masthead={masthead}>
         <PageSection>
           <Title headingLevel="h1" size="2xl">Prompt Experimentation Tool</Title>
           <p>
             Experiment with prompts using different Llama Stack models and track your results.
+            {!user && (
+              <span style={{ color: 'var(--pf-global--info-color--100)', marginLeft: '1rem' }}>
+                Sign in to create and share projects with your team.
+              </span>
+            )}
           </p>
           
           {error && (
@@ -243,6 +366,8 @@ function App() {
             projects={projects}
             onSelectProject={handleSelectProject}
             onCreateNew={() => setIsModalOpen(true)}
+            currentUser={user}
+            onShareProject={handleShareProject}
           />
         </PageSection>
       </Page>

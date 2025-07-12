@@ -124,6 +124,33 @@ div[style*="display: flex"] {
   max-width: 100% !important;
 }
 
+/* Responsive layout fixes */
+@media (max-width: 1200px) {
+  /* Force wrap for smaller screens */
+  div[style*="flexWrap: 'wrap'"] {
+    flex-wrap: wrap !important;
+  }
+  
+  /* Reduce minimum widths on small screens */
+  div[style*="minWidth: '200px'"] {
+    min-width: 150px !important;
+  }
+}
+
+@media (max-width: 768px) {
+  /* Stack layout vertically on mobile */
+  div[style*="display: 'flex'"] {
+    flex-direction: column !important;
+  }
+  
+  /* Full width for all flex children on mobile */
+  div[style*="flex: '0 0"] {
+    flex: 1 1 auto !important;
+    max-width: 100% !important;
+    min-width: unset !important;
+  }
+}
+
 /* Custom scrollbar styling for History Log */
 div[style*="overflowY: auto"] {
   scrollbar-width: thin;
