@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Page,
   PageSection,
@@ -45,6 +45,17 @@ interface PromptExperimentViewProps {
   }) => void;
 }
 
+// Project state cache interface
+interface ProjectState {
+  userPrompt: string;
+  systemPrompt: string;
+  variables: Record<string, string>;
+  variableInput: string;
+  modelParams: ModelParameters;
+  response: string;
+  historyViewMode: 'experimental' | 'prod';
+}
+
 export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
   project,
   onBack,
@@ -57,17 +68,60 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
   onGitAuth,
   onNotification,
 }) => {
-  const [userPrompt, setUserPrompt] = useState('');
-  const [systemPrompt, setSystemPrompt] = useState('');
-  const [variables, setVariables] = useState<Record<string, string>>({});
-  const [variableInput, setVariableInput] = useState('');
-  const [modelParams, setModelParams] = useState<ModelParameters>({
-    temperature: 0.7,
-    max_len: 1000,
-    top_p: 0.9,
-    top_k: 50,
+  // Project-specific state cache using useRef to persist across re-renders
+  const projectStateCache = useRef<Map<number, ProjectState>>(new Map());
+  const MAX_CACHED_PROJECTS = 10; // Limit cache size to prevent memory growth
+  
+  // Default state for new projects
+  const getDefaultProjectState = (): ProjectState => ({
+    userPrompt: '',
+    systemPrompt: '',
+    variables: {},
+    variableInput: '',
+    modelParams: {
+      temperature: 0.7,
+      max_len: 1000,
+      top_p: 0.9,
+      top_k: 50,
+    },
+    response: '',
+    historyViewMode: 'experimental',
   });
-  const [response, setResponse] = useState('');
+  
+  // Get state for current project
+  const getCurrentProjectState = (): ProjectState => {
+    if (!projectStateCache.current.has(project.id)) {
+      projectStateCache.current.set(project.id, getDefaultProjectState());
+    }
+    return projectStateCache.current.get(project.id)!;
+  };
+  
+  // Update state for current project
+  const updateCurrentProjectState = (updates: Partial<ProjectState>) => {
+    const currentState = getCurrentProjectState();
+    const newState = { ...currentState, ...updates };
+    projectStateCache.current.set(project.id, newState);
+    
+    // Clean up cache if it gets too large
+    if (projectStateCache.current.size > MAX_CACHED_PROJECTS) {
+      const entries = Array.from(projectStateCache.current.entries());
+      // Remove the oldest entry (first in the map)
+      const [oldestProjectId] = entries[0];
+      projectStateCache.current.delete(oldestProjectId);
+    }
+  };
+  
+  // Initialize state from cache or defaults
+  const initialState = getCurrentProjectState();
+  
+  const [userPrompt, setUserPrompt] = useState(initialState.userPrompt);
+  const [systemPrompt, setSystemPrompt] = useState(initialState.systemPrompt);
+  const [variables, setVariables] = useState<Record<string, string>>(initialState.variables);
+  const [variableInput, setVariableInput] = useState(initialState.variableInput);
+  const [modelParams, setModelParams] = useState<ModelParameters>(initialState.modelParams);
+  const [response, setResponse] = useState(initialState.response);
+  const [historyViewMode, setHistoryViewMode] = useState<'experimental' | 'prod'>(initialState.historyViewMode);
+  
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [history, setHistory] = useState<PromptHistory[]>([]);
@@ -84,6 +138,47 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
   useEffect(() => {
     setCurrentProject(project);
   }, [project]);
+
+  // Effect to restore state when project changes
+  useEffect(() => {
+    const projectState = getCurrentProjectState();
+    setUserPrompt(projectState.userPrompt);
+    setSystemPrompt(projectState.systemPrompt);
+    setVariables(projectState.variables);
+    setVariableInput(projectState.variableInput);
+    setModelParams(projectState.modelParams);
+    setResponse(projectState.response);
+    setHistoryViewMode(projectState.historyViewMode);
+  }, [project.id]);
+
+  // Effects to save state when it changes
+  useEffect(() => {
+    updateCurrentProjectState({ userPrompt });
+  }, [userPrompt]);
+
+  useEffect(() => {
+    updateCurrentProjectState({ systemPrompt });
+  }, [systemPrompt]);
+
+  useEffect(() => {
+    updateCurrentProjectState({ variables });
+  }, [variables]);
+
+  useEffect(() => {
+    updateCurrentProjectState({ variableInput });
+  }, [variableInput]);
+
+  useEffect(() => {
+    updateCurrentProjectState({ modelParams });
+  }, [modelParams]);
+
+  useEffect(() => {
+    updateCurrentProjectState({ response });
+  }, [response]);
+
+  useEffect(() => {
+    updateCurrentProjectState({ historyViewMode });
+  }, [historyViewMode]);
 
   const loadHistory = async () => {
     try {
@@ -548,6 +643,8 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
               gitUser={gitUser}
               onGitAuth={onGitAuth}
               onNotification={onNotification}
+              viewMode={historyViewMode}
+              onViewModeChange={setHistoryViewMode}
             />
           </div>
         </div>

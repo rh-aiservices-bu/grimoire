@@ -41,16 +41,31 @@ interface HistoryLogProps {
     actionLinks?: Array<{ text: string; url: string }>;
     actionButton?: { text: string; onClick: () => void };
   }) => void;
+  viewMode?: 'experimental' | 'prod';
+  onViewModeChange?: (mode: 'experimental' | 'prod') => void;
 }
 
-export const HistoryLog: React.FC<HistoryLogProps> = ({ history, onHistoryUpdate, projectId, hasGitRepo = false, gitUser, onGitAuth, onNotification }) => {
+export const HistoryLog: React.FC<HistoryLogProps> = ({ 
+  history, 
+  onHistoryUpdate, 
+  projectId, 
+  hasGitRepo = false, 
+  gitUser, 
+  onGitAuth, 
+  onNotification,
+  viewMode: externalViewMode,
+  onViewModeChange: externalOnViewModeChange
+}) => {
   const [selectedItem, setSelectedItem] = useState<PromptHistory | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
   const [notesItem, setNotesItem] = useState<PromptHistory | null>(null);
   const [isProdModalOpen, setIsProdModalOpen] = useState(false);
   const [prodItem, setProdItem] = useState<PromptHistory | null>(null);
-  const [viewMode, setViewMode] = useState<'experimental' | 'prod'>('experimental');
+  // Use external view mode if provided, otherwise internal state
+  const [internalViewMode, setInternalViewMode] = useState<'experimental' | 'prod'>('experimental');
+  const viewMode = externalViewMode ?? internalViewMode;
+  const setViewMode = externalOnViewModeChange ?? setInternalViewMode;
   const [prodHistory, setProdHistory] = useState<PromptHistory[]>([]);
   const [pendingPRs, setPendingPRs] = useState<PendingPR[]>([]);
   const [isLoading, setIsLoading] = useState(false);
