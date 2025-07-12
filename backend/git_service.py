@@ -52,39 +52,109 @@ class GitService:
         
         return platform, owner, repo
     
-    def get_api_base_url(self, platform: str, repo_url: str) -> str:
+    def get_api_base_url(self, platform: str, server_url: Optional[str] = None, repo_url: Optional[str] = None) -> str:
         """Get API base URL for the git platform"""
-        parsed = urlparse(repo_url)
-        
         if platform == 'github':
-            if 'github.com' in parsed.netloc:
-                return 'https://api.github.com'
-            else:
-                # GitHub Enterprise
+            if server_url:
+                parsed = urlparse(server_url)
                 return f"{parsed.scheme}://{parsed.netloc}/api/v3"
-        else:  # GitLab or Gitea
-            return f"{parsed.scheme}://{parsed.netloc}/api/v1"
+            elif repo_url and 'github.com' not in repo_url:
+                # GitHub Enterprise from repo URL
+                parsed = urlparse(repo_url)
+                return f"{parsed.scheme}://{parsed.netloc}/api/v3"
+            else:
+                return 'https://api.github.com'
+        elif platform == 'gitlab':
+            if server_url:
+                parsed = urlparse(server_url)
+                return f"{parsed.scheme}://{parsed.netloc}/api/v4"
+            elif repo_url:
+                parsed = urlparse(repo_url)
+                return f"{parsed.scheme}://{parsed.netloc}/api/v4"
+            else:
+                return 'https://gitlab.com/api/v4'
+        elif platform == 'gitea':
+            if server_url:
+                parsed = urlparse(server_url)
+                return f"{parsed.scheme}://{parsed.netloc}/api/v1"
+            elif repo_url:
+                parsed = urlparse(repo_url)
+                return f"{parsed.scheme}://{parsed.netloc}/api/v1"
+            else:
+                raise ValueError("Gitea requires server_url")
+        else:
+            raise ValueError(f"Unsupported platform: {platform}")
     
-    def test_git_access(self, platform: str, username: str, token: str, repo_url: str) -> bool:
+    def get_auth_headers(self, platform: str, token: str) -> Dict[str, str]:
+        """Get authentication headers for the git platform"""
+        if platform == 'github':
+            return {
+                'Authorization': f'token {token}',
+                'Accept': 'application/vnd.github.v3+json'
+            }
+        elif platform == 'gitlab':
+            return {
+                'Private-Token': token,
+                'Accept': 'application/json'
+            }
+        elif platform == 'gitea':
+            return {
+                'Authorization': f'token {token}',
+                'Accept': 'application/json'
+            }
+        else:
+            raise ValueError(f"Unsupported platform: {platform}")
+    
+    def test_git_access(self, platform: str, username: str, token: str, repo_url: str, server_url: Optional[str] = None) -> bool:
         """Test if git credentials have access to the repository"""
         try:
-            _, owner, repo = self.parse_git_url(repo_url)
-            api_base = self.get_api_base_url(platform, repo_url)
-            
-            headers = {
-                'Authorization': f'token {token}',
-                'Accept': 'application/vnd.github.v3+json' if platform == 'github' else 'application/json'
-            }
+            api_base = self.get_api_base_url(platform, server_url, repo_url)
+            headers = self.get_auth_headers(platform, token)
             
             if platform == 'github':
+                _, owner, repo = self.parse_git_url(repo_url)
                 url = f"{api_base}/repos/{owner}/{repo}"
-            else:  # GitLab/Gitea
-                url = f"{api_base}/repos/{owner}/{repo}"
+            elif platform == 'gitlab':
+                _, owner, repo = self.parse_git_url(repo_url)
+                # GitLab uses project ID or namespace/project format
+                url = f"{api_base}/projects/{owner}%2F{repo}"
+            elif platform == 'gitea':
+                # For Gitea, test authentication by checking user info instead of a specific repo
+                # since we don't know what public repos exist on the instance
+                url = f"{api_base}/user"
+                print(f"Testing Gitea authentication with user endpoint: {url}")
             
             response = requests.get(url, headers=headers, timeout=10)
-            return response.status_code == 200
+            print(f"Authentication test response: {response.status_code}")
+            
+            if platform == 'gitea':
+                # For Gitea user endpoint, check if we get user info and username matches
+                if response.status_code == 200:
+                    try:
+                        user_data = response.json()
+                        returned_username = user_data.get('login') or user_data.get('username')
+                        print(f"Gitea user info: {user_data}")
+                        # Verify the username matches (case-insensitive)
+                        if returned_username and returned_username.lower() == username.lower():
+                            return True
+                        else:
+                            print(f"Username mismatch: expected '{username}', got '{returned_username}'")
+                            return False
+                    except Exception as e:
+                        print(f"Failed to parse Gitea user response: {e}")
+                        return False
+                else:
+                    print(f"Gitea authentication failed with status: {response.status_code}")
+                    if response.status_code == 401:
+                        print("Invalid token or insufficient permissions")
+                    return False
+            else:
+                return response.status_code == 200
+                
         except Exception as e:
             print(f"Git access test failed: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     def create_initial_pr(self, platform: str, token: str, repo_url: str, project_name: str, provider_id: str) -> Optional[Dict[str, Any]]:
@@ -159,9 +229,126 @@ class GitService:
                     'pr_number': pr_data['number']
                 }
             
+            elif platform == 'gitlab':
+                # GitLab implementation
+                project_path = f"{owner}%2F{repo}"  # URL-encoded project path
+                
+                # Get default branch
+                project_url = f"{api_base}/projects/{project_path}"
+                project_response = requests.get(project_url, headers=headers)
+                if project_response.status_code != 200:
+                    print(f"Failed to get GitLab project info: {project_response.text}")
+                    return None
+                default_branch = project_response.json()['default_branch']
+                
+                # Create new branch
+                branch_data = {
+                    "branch": branch_name,
+                    "ref": default_branch
+                }
+                branch_url = f"{api_base}/projects/{project_path}/repository/branches"
+                branch_response = requests.post(branch_url, headers=headers, json=branch_data)
+                if branch_response.status_code not in [200, 201]:
+                    print(f"Failed to create GitLab branch: {branch_response.text}")
+                    return None
+                
+                # Create .gitkeep file in the model folder
+                file_path = f"{project_name}/{provider_id}/.gitkeep"
+                file_content = "# This file ensures the directory structure is preserved in git"
+                
+                file_data = {
+                    "branch": branch_name,
+                    "commit_message": f"✨ Initialize project structure for {project_name}",
+                    "content": base64.b64encode(file_content.encode()).decode()
+                }
+                
+                file_url = f"{api_base}/projects/{project_path}/repository/files/{file_path.replace('/', '%2F')}"
+                file_response = requests.post(file_url, headers=headers, json=file_data)
+                if file_response.status_code not in [200, 201]:
+                    print(f"Failed to create GitLab file: {file_response.text}")
+                    return None
+                
+                # Create merge request (GitLab's equivalent of PR)
+                mr_data = {
+                    "source_branch": branch_name,
+                    "target_branch": default_branch,
+                    "title": f"✨ Initialize project: {project_name}",
+                    "description": f"This MR creates the initial folder structure for the **{project_name}** project.\n\n**Folder structure:**\n```\n{project_name}/\n└── {provider_id}/\n    └── .gitkeep\n```\n\nAfter merging this MR, you can start tagging prompts as production to automatically create prompt files in this structure."
+                }
+                mr_url = f"{api_base}/projects/{project_path}/merge_requests"
+                mr_response = requests.post(mr_url, headers=headers, json=mr_data)
+                if mr_response.status_code not in [200, 201]:
+                    print(f"Failed to create GitLab MR: {mr_response.text}")
+                    return None
+                
+                mr_data = mr_response.json()
+                return {
+                    'pr_url': mr_data['web_url'],
+                    'pr_number': mr_data['iid']  # GitLab uses 'iid' (internal ID)
+                }
+            
+            elif platform == 'gitea':
+                # Gitea implementation
+                # Get default branch
+                repo_info_url = f"{api_base}/repos/{owner}/{repo}"
+                repo_response = requests.get(repo_info_url, headers=headers)
+                if repo_response.status_code != 200:
+                    print(f"Failed to get Gitea repo info: {repo_response.text}")
+                    return None
+                default_branch = repo_response.json()['default_branch']
+                
+                # Create new branch
+                branch_data = {
+                    "new_branch_name": branch_name,
+                    "old_branch_name": default_branch
+                }
+                branch_url = f"{api_base}/repos/{owner}/{repo}/branches"
+                branch_response = requests.post(branch_url, headers=headers, json=branch_data)
+                if branch_response.status_code not in [200, 201]:
+                    error_msg = branch_response.text
+                    print(f"Failed to create Gitea branch: {error_msg}")
+                    # Check for empty repository error
+                    if "Git Repository is empty" in error_msg:
+                        raise Exception("EMPTY_REPOSITORY: The git repository is empty. Please create an initial commit (e.g., add a README.md file) before creating pull requests.")
+                    return None
+                
+                # Create .gitkeep file in the model folder
+                file_path = f"{project_name}/{provider_id}/.gitkeep"
+                file_content = "# This file ensures the directory structure is preserved in git"
+                
+                file_data = {
+                    "branch": branch_name,
+                    "message": f"✨ Initialize project structure for {project_name}",
+                    "content": base64.b64encode(file_content.encode()).decode()
+                }
+                
+                file_url = f"{api_base}/repos/{owner}/{repo}/contents/{file_path}"
+                file_response = requests.post(file_url, headers=headers, json=file_data)
+                if file_response.status_code not in [200, 201]:
+                    print(f"Failed to create Gitea file: {file_response.text}")
+                    return None
+                
+                # Create pull request
+                pr_data = {
+                    "head": branch_name,
+                    "base": default_branch,
+                    "title": f"✨ Initialize project: {project_name}",
+                    "body": f"This PR creates the initial folder structure for the **{project_name}** project.\n\n**Folder structure:**\n```\n{project_name}/\n└── {provider_id}/\n    └── .gitkeep\n```\n\nAfter merging this PR, you can start tagging prompts as production to automatically create prompt files in this structure."
+                }
+                pr_url = f"{api_base}/repos/{owner}/{repo}/pulls"
+                pr_response = requests.post(pr_url, headers=headers, json=pr_data)
+                if pr_response.status_code not in [200, 201]:
+                    print(f"Failed to create Gitea PR: {pr_response.text}")
+                    return None
+                
+                pr_data = pr_response.json()
+                return {
+                    'pr_url': pr_data['html_url'],
+                    'pr_number': pr_data['number']
+                }
+            
             else:
-                # GitLab/Gitea implementation would go here
-                # For now, return None to indicate unsupported
+                print(f"Unsupported platform for PR creation: {platform}")
                 return None
                 
         except Exception as e:
@@ -262,8 +449,182 @@ class GitService:
                     'pr_number': pr_data['number']
                 }
             
+            elif platform == 'gitlab':
+                # GitLab implementation for prompt PR
+                project_path = f"{owner}%2F{repo}"  # URL-encoded project path
+                
+                # Create branch name  
+                import time
+                timestamp = str(int(time.time()))
+                branch_name = f"update-prompt-{project_name.lower().replace(' ', '-')}-{timestamp}"
+                
+                # Get default branch
+                project_url = f"{api_base}/projects/{project_path}"
+                project_response = requests.get(project_url, headers=headers)
+                if project_response.status_code != 200:
+                    print(f"Failed to get GitLab project info: {project_response.text}")
+                    return None
+                default_branch = project_response.json()['default_branch']
+                
+                # Create new branch
+                branch_data = {
+                    "branch": branch_name,
+                    "ref": default_branch
+                }
+                branch_url = f"{api_base}/projects/{project_path}/repository/branches"
+                branch_response = requests.post(branch_url, headers=headers, json=branch_data)
+                if branch_response.status_code not in [200, 201]:
+                    print(f"Failed to create GitLab branch: {branch_response.text}")
+                    return None
+                
+                # Prepare prompt JSON content
+                prompt_json = {
+                    "user_prompt": prompt_data.user_prompt,
+                    "system_prompt": prompt_data.system_prompt,
+                    "temperature": prompt_data.temperature,
+                    "max_len": prompt_data.max_len,
+                    "top_p": prompt_data.top_p,
+                    "top_k": prompt_data.top_k,
+                    "variables": prompt_data.variables,
+                    "created_at": prompt_data.created_at
+                }
+                
+                file_content = json.dumps(prompt_json, indent=2)
+                file_path = f"{project_name}/{provider_id}/prompt_prod.json"
+                
+                # Check if file exists
+                encoded_file_path = file_path.replace('/', '%2F')
+                existing_file_url = f"{api_base}/projects/{project_path}/repository/files/{encoded_file_path}"
+                existing_response = requests.get(existing_file_url, headers=headers, params={"ref": default_branch})
+                
+                file_data = {
+                    "branch": branch_name,
+                    "commit_message": f"🚀 Update production prompt for {project_name}",
+                    "content": base64.b64encode(file_content.encode()).decode()
+                }
+                
+                if existing_response.status_code == 200:
+                    # File exists, update it
+                    file_response = requests.put(existing_file_url, headers=headers, json=file_data)
+                    action = "Update"
+                else:
+                    # File doesn't exist, create it
+                    file_response = requests.post(existing_file_url, headers=headers, json=file_data)
+                    action = "Create"
+                
+                if file_response.status_code not in [200, 201]:
+                    print(f"Failed to {action.lower()} GitLab file: {file_response.text}")
+                    return None
+                
+                # Create merge request
+                mr_data = {
+                    "source_branch": branch_name,
+                    "target_branch": default_branch,
+                    "title": f"🚀 {action} production prompt for {project_name}",
+                    "description": f"This MR {'updates' if existing_response.status_code == 200 else 'creates'} the production prompt for **{project_name}** with model **{provider_id}**.\n\n**Prompt Details:**\n- User Prompt: {prompt_data.user_prompt[:100]}{'...' if len(prompt_data.user_prompt) > 100 else ''}\n- System Prompt: {prompt_data.system_prompt[:100] + '...' if prompt_data.system_prompt and len(prompt_data.system_prompt) > 100 else prompt_data.system_prompt or 'None'}\n- Temperature: {prompt_data.temperature}\n- Max Length: {prompt_data.max_len}\n\n**File:** `{file_path}`"
+                }
+                mr_url = f"{api_base}/projects/{project_path}/merge_requests"
+                mr_response = requests.post(mr_url, headers=headers, json=mr_data)
+                if mr_response.status_code not in [200, 201]:
+                    print(f"Failed to create GitLab MR: {mr_response.text}")
+                    return None
+                
+                mr_data = mr_response.json()
+                return {
+                    'pr_url': mr_data['web_url'],
+                    'pr_number': mr_data['iid']  # GitLab uses 'iid' (internal ID)
+                }
+            
+            elif platform == 'gitea':
+                # Gitea implementation for prompt PR
+                # Create branch name  
+                import time
+                timestamp = str(int(time.time()))
+                branch_name = f"update-prompt-{project_name.lower().replace(' ', '-')}-{timestamp}"
+                
+                # Get default branch
+                repo_info_url = f"{api_base}/repos/{owner}/{repo}"
+                repo_response = requests.get(repo_info_url, headers=headers)
+                if repo_response.status_code != 200:
+                    print(f"Failed to get Gitea repo info: {repo_response.text}")
+                    return None
+                default_branch = repo_response.json()['default_branch']
+                
+                # Create new branch
+                branch_data = {
+                    "new_branch_name": branch_name,
+                    "old_branch_name": default_branch
+                }
+                branch_url = f"{api_base}/repos/{owner}/{repo}/branches"
+                branch_response = requests.post(branch_url, headers=headers, json=branch_data)
+                if branch_response.status_code not in [200, 201]:
+                    error_msg = branch_response.text
+                    print(f"Failed to create Gitea branch: {error_msg}")
+                    # Check for empty repository error
+                    if "Git Repository is empty" in error_msg:
+                        raise Exception("EMPTY_REPOSITORY: The git repository is empty. Please create an initial commit (e.g., add a README.md file) before creating pull requests.")
+                    return None
+                
+                # Prepare prompt JSON content
+                prompt_json = {
+                    "user_prompt": prompt_data.user_prompt,
+                    "system_prompt": prompt_data.system_prompt,
+                    "temperature": prompt_data.temperature,
+                    "max_len": prompt_data.max_len,
+                    "top_p": prompt_data.top_p,
+                    "top_k": prompt_data.top_k,
+                    "variables": prompt_data.variables,
+                    "created_at": prompt_data.created_at
+                }
+                
+                file_content = json.dumps(prompt_json, indent=2)
+                file_path = f"{project_name}/{provider_id}/prompt_prod.json"
+                
+                # Check if file exists
+                existing_file_url = f"{api_base}/repos/{owner}/{repo}/contents/{file_path}"
+                existing_response = requests.get(existing_file_url, headers=headers)
+                
+                file_data = {
+                    "branch": branch_name,
+                    "message": f"🚀 Update production prompt for {project_name}",
+                    "content": base64.b64encode(file_content.encode()).decode()
+                }
+                
+                if existing_response.status_code == 200:
+                    # File exists, update it
+                    file_data["sha"] = existing_response.json()["sha"]
+                    file_response = requests.put(existing_file_url, headers=headers, json=file_data)
+                    action = "Update"
+                else:
+                    # File doesn't exist, create it
+                    file_response = requests.post(existing_file_url, headers=headers, json=file_data)
+                    action = "Create"
+                
+                if file_response.status_code not in [200, 201]:
+                    print(f"Failed to {action.lower()} Gitea file: {file_response.text}")
+                    return None
+                
+                # Create pull request
+                pr_data = {
+                    "head": branch_name,
+                    "base": default_branch,
+                    "title": f"🚀 {action} production prompt for {project_name}",
+                    "body": f"This PR {'updates' if existing_response.status_code == 200 else 'creates'} the production prompt for **{project_name}** with model **{provider_id}**.\n\n**Prompt Details:**\n- User Prompt: {prompt_data.user_prompt[:100]}{'...' if len(prompt_data.user_prompt) > 100 else ''}\n- System Prompt: {prompt_data.system_prompt[:100] + '...' if prompt_data.system_prompt and len(prompt_data.system_prompt) > 100 else prompt_data.system_prompt or 'None'}\n- Temperature: {prompt_data.temperature}\n- Max Length: {prompt_data.max_len}\n\n**File:** `{file_path}`"
+                }
+                pr_url = f"{api_base}/repos/{owner}/{repo}/pulls"
+                pr_response = requests.post(pr_url, headers=headers, json=pr_data)
+                if pr_response.status_code not in [200, 201]:
+                    print(f"Failed to create Gitea PR: {pr_response.text}")
+                    return None
+                
+                pr_data = pr_response.json()
+                return {
+                    'pr_url': pr_data['html_url'],
+                    'pr_number': pr_data['number']
+                }
+            
             else:
-                # GitLab/Gitea implementation would go here
+                print(f"Unsupported platform for prompt PR creation: {platform}")
                 return None
                 
         except Exception as e:
@@ -274,12 +635,8 @@ class GitService:
         """Get the current production prompt from git repository"""
         try:
             _, owner, repo = self.parse_git_url(repo_url)
-            api_base = self.get_api_base_url(platform, repo_url)
-            
-            headers = {
-                'Authorization': f'token {token}',
-                'Accept': 'application/vnd.github.v3+json' if platform == 'github' else 'application/json'
-            }
+            api_base = self.get_api_base_url(platform, None, repo_url)
+            headers = self.get_auth_headers(platform, token)
             
             file_path = f"{project_name}/{provider_id}/prompt_prod.json"
             print(f"Looking for prod prompt at: {file_path}")
@@ -304,8 +661,55 @@ class GitService:
                 else:
                     print(f"File not found: {response.text}")
                     return None
+            
+            elif platform == 'gitlab':
+                # GitLab implementation
+                project_path = f"{owner}%2F{repo}"
+                encoded_file_path = file_path.replace('/', '%2F')
+                file_url = f"{api_base}/projects/{project_path}/repository/files/{encoded_file_path}"
+                print(f"Fetching from: {file_url}")
+                response = requests.get(file_url, headers=headers)
+                print(f"File fetch response: {response.status_code}")
+                
+                if response.status_code == 200:
+                    file_data = response.json()
+                    content = base64.b64decode(file_data['content']).decode()
+                    print(f"File content: {content[:200]}...")
+                    prompt_json = json.loads(content)
+                    
+                    # Ensure created_at is a string
+                    if 'created_at' in prompt_json and prompt_json['created_at'] is None:
+                        prompt_json['created_at'] = "2024-01-01T00:00:00"
+                    
+                    return ProdPromptData(**prompt_json)
+                else:
+                    print(f"File not found: {response.text}")
+                    return None
+            
+            elif platform == 'gitea':
+                # Gitea implementation
+                file_url = f"{api_base}/repos/{owner}/{repo}/contents/{file_path}"
+                print(f"Fetching from: {file_url}")
+                response = requests.get(file_url, headers=headers)
+                print(f"File fetch response: {response.status_code}")
+                
+                if response.status_code == 200:
+                    file_data = response.json()
+                    content = base64.b64decode(file_data['content']).decode()
+                    print(f"File content: {content[:200]}...")
+                    prompt_json = json.loads(content)
+                    
+                    # Ensure created_at is a string
+                    if 'created_at' in prompt_json and prompt_json['created_at'] is None:
+                        prompt_json['created_at'] = "2024-01-01T00:00:00"
+                    
+                    return ProdPromptData(**prompt_json)
+                else:
+                    print(f"File not found: {response.text}")
+                    return None
+            
             else:
-                # GitLab/Gitea implementation would go here
+                print(f"Unsupported platform: {platform}")
                 return None
                 
         except Exception as e:
@@ -359,10 +763,15 @@ class GitService:
             _, owner, repo = self.parse_git_url(repo_url)
             api_base = self.get_api_base_url(platform, repo_url)
             
-            headers = {
-                'Authorization': f'token {token}',
-                'Accept': 'application/vnd.github.v3+json' if platform == 'github' else 'application/json'
-            }
+            headers = self.get_auth_headers(platform, token)
+            
+            print(f"🔍 Getting commit history for {platform}")
+            print(f"   Repo URL: {repo_url}")
+            print(f"   Owner: {owner}, Repo: {repo}")
+            print(f"   API Base: {api_base}")
+            print(f"   File Path: {file_path}")
+            print(f"   Headers: {headers}")
+            print(f"   Limit: {limit}")
             
             if platform == 'github':
                 commits_url = f"{api_base}/repos/{owner}/{repo}/commits"
@@ -387,8 +796,68 @@ class GitService:
                 else:
                     print(f"Failed to get commit history: {response.text}")
                     return []
+            elif platform == 'gitlab':
+                commits_url = f"{api_base}/projects/{owner}%2F{repo}/repository/commits"
+                params = {
+                    'path': file_path,
+                    'per_page': limit
+                }
+                response = requests.get(commits_url, headers=headers, params=params)
+                
+                if response.status_code == 200:
+                    commits = response.json()
+                    return [
+                        {
+                            'sha': commit['id'],
+                            'message': commit['message'],
+                            'date': commit['created_at'],
+                            'author': commit['author_name'],
+                            'url': commit['web_url']
+                        }
+                        for commit in commits
+                    ]
+                else:
+                    print(f"Failed to get GitLab commit history: {response.text}")
+                    return []
+                    
+            elif platform == 'gitea':
+                commits_url = f"{api_base}/repos/{owner}/{repo}/commits"
+                params = {
+                    'path': file_path,
+                    'limit': limit
+                }
+                print(f"🔍 Gitea commits URL: {commits_url}")
+                print(f"🔍 Gitea params: {params}")
+                
+                response = requests.get(commits_url, headers=headers, params=params)
+                print(f"🔍 Gitea response status: {response.status_code}")
+                print(f"🔍 Gitea response headers: {dict(response.headers)}")
+                
+                if response.status_code == 200:
+                    commits = response.json()
+                    print(f"🔍 Gitea commits count: {len(commits)}")
+                    print(f"🔍 Gitea raw response: {response.text[:500]}...")
+                    
+                    parsed_commits = []
+                    for i, commit in enumerate(commits):
+                        print(f"🔍 Gitea commit {i}: {commit}")
+                        parsed_commit = {
+                            'sha': commit['sha'],
+                            'message': commit['commit']['message'],
+                            'date': commit['commit']['author']['date'],
+                            'author': commit['commit']['author']['name'],
+                            'url': commit['html_url']
+                        }
+                        print(f"🔍 Parsed commit {i}: {parsed_commit}")
+                        parsed_commits.append(parsed_commit)
+                    
+                    return parsed_commits
+                else:
+                    print(f"❌ Failed to get Gitea commit history: {response.status_code}")
+                    print(f"❌ Response text: {response.text}")
+                    return []
             else:
-                # GitLab/Gitea implementation would go here
+                print(f"Unsupported platform: {platform}")
                 return []
                 
         except Exception as e:
@@ -403,10 +872,7 @@ class GitService:
             _, owner, repo = self.parse_git_url(repo_url)
             api_base = self.get_api_base_url(platform, repo_url)
             
-            headers = {
-                'Authorization': f'token {token}',
-                'Accept': 'application/vnd.github.v3+json' if platform == 'github' else 'application/json'
-            }
+            headers = self.get_auth_headers(platform, token)
             
             if platform == 'github':
                 file_url = f"{api_base}/repos/{owner}/{repo}/contents/{file_path}"
@@ -425,8 +891,45 @@ class GitService:
                     return ProdPromptData(**prompt_json)
                 else:
                     return None
+            elif platform == 'gitlab':
+                file_url = f"{api_base}/projects/{owner}%2F{repo}/repository/files/{file_path.replace('/', '%2F')}"
+                params = {'ref': commit_sha}
+                response = requests.get(file_url, headers=headers, params=params)
+                
+                if response.status_code == 200:
+                    file_data = response.json()
+                    content = base64.b64decode(file_data['content']).decode()
+                    prompt_json = json.loads(content)
+                    
+                    # Ensure created_at is a string
+                    if 'created_at' in prompt_json and prompt_json['created_at'] is None:
+                        prompt_json['created_at'] = "2024-01-01T00:00:00"
+                    
+                    return ProdPromptData(**prompt_json)
+                else:
+                    print(f"Failed to get GitLab file content at commit: {response.text}")
+                    return None
+                    
+            elif platform == 'gitea':
+                file_url = f"{api_base}/repos/{owner}/{repo}/contents/{file_path}"
+                params = {'ref': commit_sha}
+                response = requests.get(file_url, headers=headers, params=params)
+                
+                if response.status_code == 200:
+                    file_data = response.json()
+                    content = base64.b64decode(file_data['content']).decode()
+                    prompt_json = json.loads(content)
+                    
+                    # Ensure created_at is a string
+                    if 'created_at' in prompt_json and prompt_json['created_at'] is None:
+                        prompt_json['created_at'] = "2024-01-01T00:00:00"
+                    
+                    return ProdPromptData(**prompt_json)
+                else:
+                    print(f"Failed to get Gitea file content at commit: {response.text}")
+                    return None
             else:
-                # GitLab/Gitea implementation would go here
+                print(f"Unsupported platform: {platform}")
                 return None
                 
         except Exception as e:

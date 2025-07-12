@@ -296,11 +296,11 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
   return (
     <div style={{ 
       width: '100vw', 
-      height: '100vh', 
+      minHeight: '100vh', 
       margin: 0, 
       padding: 0,
       backgroundColor: '#f0f0f0',
-      overflow: 'hidden'
+      overflow: 'auto'
     }}>
       {/* Header Section */}
       <div style={{ 
@@ -317,7 +317,7 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
       {/* Main Content Section */}
       <div style={{ 
         width: '100%',
-        height: 'calc(100vh - 120px)',
+        minHeight: 'calc(100vh - 120px)',
         padding: '0.5rem',
         boxSizing: 'border-box'
       }}>
@@ -466,7 +466,7 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
             flex: '1',
             minWidth: '0'
           }}>
-            <Card style={{ height: '100%' }}>
+            <Card>
               <CardTitle>Prompt Configuration</CardTitle>
               <CardBody>
                 <Form>
@@ -604,9 +604,9 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
 
                   {/* Preview section */}
                   {userPrompt && Object.keys(variables).length > 0 && (
-                    <Card style={{ marginBottom: '1rem', backgroundColor: 'var(--pf-global--palette--blue-50)' }}>
+                    <Card style={{ marginBottom: '1rem', backgroundColor: 'var(--pf-global--palette--blue-50)', maxHeight: '300px' }}>
                       <CardTitle>Preview (with variables)</CardTitle>
-                      <CardBody>
+                      <CardBody style={{ maxHeight: '250px', overflowY: 'auto' }}>
                         <strong>User Prompt:</strong>
                         <div style={{ 
                           backgroundColor: 'white', 
@@ -614,7 +614,9 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
                           border: '1px solid var(--pf-global--BorderColor--100)',
                           borderRadius: '4px',
                           marginTop: '0.25rem',
-                          marginBottom: '0.5rem'
+                          marginBottom: '0.5rem',
+                          maxHeight: '100px',
+                          overflowY: 'auto'
                         }}>
                           {processTemplateVariables(userPrompt, variables)}
                         </div>
@@ -626,7 +628,9 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
                               padding: '0.5rem', 
                               border: '1px solid var(--pf-global--BorderColor--100)',
                               borderRadius: '4px',
-                              marginTop: '0.25rem'
+                              marginTop: '0.25rem',
+                              maxHeight: '100px',
+                              overflowY: 'auto'
                             }}>
                               {processTemplateVariables(systemPrompt, variables)}
                             </div>

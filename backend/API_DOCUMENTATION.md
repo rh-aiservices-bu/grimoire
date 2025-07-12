@@ -10,7 +10,42 @@ The API provides comprehensive interactive documentation through multiple interf
 
 ## 🚀 Quick Start
 
-### 1. List All Projects and Models
+### 1. Authenticate with Git (Optional)
+
+**GitHub:**
+```bash
+curl -X POST http://localhost:3001/api/git/auth \
+  -H "Content-Type: application/json" \
+  -d '{"platform": "github", "username": "your-username", "access_token": "your-token"}'
+```
+
+**GitLab (hosted gitlab.com):**
+```bash
+curl -X POST http://localhost:3001/api/git/auth \
+  -H "Content-Type: application/json" \
+  -d '{"platform": "gitlab", "username": "your-username", "access_token": "your-token"}'
+```
+
+**GitLab (self-hosted):**
+```bash
+curl -X POST http://localhost:3001/api/git/auth \
+  -H "Content-Type: application/json" \
+  -d '{"platform": "gitlab", "username": "your-username", "access_token": "your-token", "server_url": "https://gitlab.example.com"}'
+```
+
+**Gitea:**
+```bash
+curl -X POST http://localhost:3001/api/git/auth \
+  -H "Content-Type: application/json" \
+  -d '{"platform": "gitea", "username": "your-username", "access_token": "your-token", "server_url": "https://git.example.com"}'
+```
+
+**Authentication Testing:**
+- **GitHub**: Tests access to public repository `octocat/Hello-World`
+- **GitLab**: Tests access to public repository `gitlab-org/gitlab`  
+- **Gitea**: Tests authentication using user info endpoint (`/api/v1/user`) and validates username match
+
+### 2. List All Projects and Models
 ```bash
 curl http://localhost:3001/api/projects-models
 ```
@@ -33,7 +68,7 @@ curl http://localhost:3001/api/projects-models
 }
 ```
 
-### 2. Get Latest Prompt Configuration
+### 3. Get Latest Prompt Configuration
 ```bash
 curl http://localhost:3001/prompt/newsummary/llama32-full
 ```
@@ -54,7 +89,7 @@ curl http://localhost:3001/prompt/newsummary/llama32-full
 }
 ```
 
-### 3. Get Production Prompt Configuration
+### 4. Get Production Prompt Configuration
 ```bash
 curl http://localhost:3001/prompt/newsummary/llama32-full/prod
 ```
@@ -91,6 +126,22 @@ curl http://localhost:3001/prompt/newsummary/llama32-full/prod
 - **GET** `/prompt/{project_name}/{provider_id}/prod` - Get production-ready prompt configuration
 - **Tag**: `External API`
 - **Use Case**: Access only production-tested, approved prompts for deployment
+- **Note**: Serves from git repository when available, falls back to database
+
+### Git Integration
+- **POST** `/api/git/auth` - Authenticate with git platform (GitHub/GitLab/Gitea)
+- **Tag**: `Git`
+- **Use Case**: Enable git-based production workflow
+- **Supports**: GitHub.com, GitHub Enterprise, GitLab.com, self-hosted GitLab, self-hosted Gitea
+- **Authentication**: Different token types per platform (GitHub: Personal Access Token, GitLab: Private Token, Gitea: Access Token)
+
+### Production Workflow
+- **POST** `/api/projects/{id}/history/{historyId}/tag-prod` - Create production pull request
+- **GET** `/api/projects/{id}/pending-prs` - Get pending pull requests with live status
+- **GET** `/api/projects/{id}/prod-history` - Get production history from git commits
+- **Tag**: `Git`
+- **Use Case**: Git-based production deployment workflow
+- **Platform Support**: GitHub, GitLab, and Gitea fully supported
 
 ## 🏷️ API Organization
 
@@ -99,6 +150,7 @@ Endpoints are organized into logical groups:
 - **📁 Projects** - Project CRUD operations
 - **📜 History** - Prompt history management  
 - **⚡ Generation** - Response generation (streaming)
+- **🔀 Git** - Git platform authentication and operations
 - **🌍 External API** - Integration endpoints
 - **📖 Documentation** - API information
 
@@ -146,6 +198,16 @@ Once the server is running:
 ```python
 import requests
 
+# Optional: Authenticate with git for production workflow
+git_auth = {
+    "platform": "github",
+    "username": "your-username", 
+    "access_token": "your-personal-access-token"
+}
+auth_response = requests.post("http://localhost:3001/api/git/auth", json=git_auth)
+if auth_response.status_code == 200:
+    print("Git authentication successful")
+
 # Get available projects
 response = requests.get("http://localhost:3001/api/projects-models")
 projects = response.json()["projects"]
@@ -160,7 +222,7 @@ if projects:
     print(f"Latest prompt: {prompt_config['userPrompt']}")
     print(f"Is production: {prompt_config['is_prod']}")
     
-    # Get production prompt specifically
+    # Get production prompt specifically (from git when available)
     try:
         prod_response = requests.get(
             f"http://localhost:3001/prompt/{project['name']}/{project['provider_id']}/prod"
@@ -168,10 +230,22 @@ if projects:
         if prod_response.status_code == 200:
             prod_config = prod_response.json()
             print(f"Production prompt: {prod_config['userPrompt']}")
+            print("Source: Git repository" if prod_config.get('is_prod') else "Source: Database")
         else:
             print("No production prompt available")
     except requests.exceptions.RequestException:
         print("Error getting production prompt")
+        
+    # Check for pending production PRs
+    try:
+        prs_response = requests.get(f"http://localhost:3001/api/projects/{project['id']}/pending-prs")
+        if prs_response.status_code == 200:
+            pending_prs = prs_response.json()
+            print(f"Pending PRs: {len(pending_prs)}")
+            for pr in pending_prs:
+                print(f"  - PR #{pr['pr_number']}: {pr['pr_url']}")
+    except requests.exceptions.RequestException:
+        print("Error getting pending PRs")
 ```
 
 ### JavaScript Example

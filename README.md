@@ -8,8 +8,11 @@ A web application built with PatternFly for experimenting with prompts using Lla
 - **Prompt Experimentation**: Enter user and system prompts with template variable support
 - **Model Parameters**: Configure temperature, max_len, top_p, and top_k parameters
 - **History Tracking**: View and manage your prompt/response history per project
-- **Production Tagging**: Mark prompts as production-ready with star ratings and badges
+- **Git Integration**: Connect projects to GitHub/GitLab/Gitea repositories for version control
+- **Production Workflow**: Create Pull Requests for production prompt deployments
+- **Dual History Views**: Switch between experimental prompts and production git history
 - **Rating & Notes**: Rate prompts with thumbs up/down and add detailed notes
+- **Real-time Sync**: Auto-refresh production data from git repositories
 - **Database Persistence**: SQLite database for storing projects and history
 - **API Access**: External API endpoints for integration with other systems
 - **OpenShift Ready**: Includes Containerfile and Helm chart for deployment
@@ -53,6 +56,41 @@ A web application built with PatternFly for experimenting with prompts using Lla
    - **Project Name**: A descriptive name for your project
    - **Llama Stack URL**: Your Llama Stack server URL (e.g., `http://localhost:8000`)
    - **Provider ID**: The model name available in your Llama Stack instance (e.g., `llama-3.1-8b-instruct`)
+   - **Git Repository URL** (optional): Connect to GitHub/GitLab/Gitea for version-controlled production prompts
+
+### Git Integration Setup
+
+For projects with git repositories:
+
+1. **Authenticate with Git**: Click "Authenticate with Git" in the interface
+2. **Choose Platform**: Select GitHub, GitLab, or Gitea
+3. **Configure Platform**:
+   - **GitHub**: Works with github.com and GitHub Enterprise
+   - **GitLab**: Works with gitlab.com (leave server URL empty) or self-hosted GitLab instances
+   - **Gitea**: Requires server URL for your Gitea instance
+4. **Provide Credentials**:
+   - Username: Your git platform username
+   - Server URL: Required for Gitea, optional for self-hosted GitLab
+   - Access Token: Platform-specific token with repository permissions
+     - **GitHub**: Personal Access Token (Settings > Developer settings > Personal access tokens)
+     - **GitLab**: Private Token (User Settings > Access Tokens)
+     - **Gitea**: Access Token (User Settings > Applications > Access Tokens)
+
+**Authentication Testing:**
+- **GitHub**: Tests access to public repository `octocat/Hello-World`
+- **GitLab**: Tests access to public repository `gitlab-org/gitlab`
+- **Gitea**: Tests authentication using user info endpoint (`/api/v1/user`)
+5. **Automatic Setup**: The system will create initial repository structure
+
+### Production Workflow
+
+With git integration enabled:
+
+1. **Experiment**: Create and test prompts in experimental mode
+2. **Tag for Production**: Click the star icon to create a Pull Request
+3. **Review**: The system opens your git platform for PR review
+4. **Merge**: Once merged, prompts become available via production API
+5. **Monitor**: View production history from the git repository
 
 ### Using Template Variables
 
@@ -113,13 +151,29 @@ Update `helm/values.yaml` to customize:
 ### External API
 - `GET /api/projects-models` - List all projects and models for integration
 - `GET /prompt/{project_name}/{provider_id}` - Get latest prompt configuration
-- `GET /prompt/{project_name}/{provider_id}/prod` - Get production prompt configuration
+- `GET /prompt/{project_name}/{provider_id}/prod` - Get production prompt configuration (from git when available)
+
+### Git Integration
+- `POST /api/git/auth` - Authenticate with git platform (GitHub/GitLab/Gitea)
+- `GET /api/git/user` - Get current authenticated git user
+- `POST /api/projects/{id}/history/{historyId}/tag-prod` - Create production PR
+- `GET /api/projects/{id}/pending-prs` - Get pending pull requests
+- `GET /api/projects/{id}/prod-history` - Get production history from git
+- `POST /api/projects/{id}/sync-prs` - Sync PR statuses from git
 
 ### Production Features
-- Star rating system to mark prompts as production-ready
-- Only one prompt per project can be marked as production
-- Production prompts are sorted to the top of history
-- Dedicated API endpoint for accessing production prompts
+- **Git-based Production Workflow**: Create Pull Requests for production deployments
+- **Dual History Views**: Switch between experimental and production (git-based) history
+- **Real-time Sync**: Auto-refresh production data from git repositories every 30 seconds
+- **Smart Caching**: Optimized performance with incremental git synchronization
+- **Pull Request Tracking**: Monitor pending PRs with live status updates
+- **Version Control**: Full git history of production prompt changes
+- **Fallback Support**: Works with or without git integration
+
+**Platform Support for Production Workflow:**
+- **GitHub**: ✅ Full support (PR creation, status tracking, history sync)
+- **GitLab**: ✅ Full support (MR creation, status tracking, history sync)
+- **Gitea**: ✅ Full support (PR creation, status tracking, history sync)
 
 ## Development
 

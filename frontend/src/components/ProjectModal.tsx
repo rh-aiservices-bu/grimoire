@@ -9,7 +9,11 @@ import {
   ModalBody,
   ModalFooter,
   ModalHeader,
+  Tooltip,
+  Flex,
+  FlexItem,
 } from '@patternfly/react-core';
+import { QuestionCircleIcon } from '@patternfly/react-icons';
 
 interface ProjectModalProps {
   isOpen: boolean;
@@ -76,7 +80,26 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onS
               placeholder="llama-3.1-8b-instruct"
             />
           </FormGroup>
-          <FormGroup label="Git Repository URL (Optional)" fieldId="git-repo-url">
+          <FormGroup 
+            label={
+              <Flex alignItems={{ default: 'alignItemsCenter' }}>
+                <FlexItem>Git Repository URL (Optional)</FlexItem>
+                <FlexItem>
+                  <Tooltip content="Connect to a Git repository to enable production workflow. Production prompts and configurations are stored as JSON files in the repository, allowing version control and team collaboration.">
+                    <QuestionCircleIcon style={{ 
+                      marginLeft: '2px', 
+                      color: 'black', 
+                      backgroundColor: 'white', 
+                      borderRadius: '50%',
+                      border: '1px solid black',
+                      fontSize: '14px'
+                    }} />
+                  </Tooltip>
+                </FlexItem>
+              </Flex>
+            } 
+            fieldId="git-repo-url"
+          >
             <TextInput
               type="url"
               id="git-repo-url"

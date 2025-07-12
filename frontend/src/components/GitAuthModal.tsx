@@ -12,12 +12,14 @@ import {
   FormSelect,
   FormSelectOption,
   Spinner,
+  HelperText,
+  HelperTextItem,
 } from '@patternfly/react-core';
 
 interface GitAuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: { platform: string; username: string; access_token: string }) => Promise<void>;
+  onSubmit: (data: { platform: string; username: string; access_token: string; server_url?: string }) => Promise<void>;
   isAuthenticating?: boolean;
 }
 
@@ -25,16 +27,29 @@ export const GitAuthModal: React.FC<GitAuthModalProps> = ({ isOpen, onClose, onS
   const [platform, setPlatform] = useState('github');
   const [username, setUsername] = useState('');
   const [accessToken, setAccessToken] = useState('');
+  const [serverUrl, setServerUrl] = useState('');
 
   const handleSubmit = async () => {
-    if (platform && username && accessToken) {
-      await onSubmit({ platform, username, access_token: accessToken });
+    const requiresServerUrl = platform === 'gitlab' || platform === 'gitea';
+    if (platform && username && accessToken && (!requiresServerUrl || serverUrl)) {
+      const authData: { platform: string; username: string; access_token: string; server_url?: string } = {
+        platform,
+        username,
+        access_token: accessToken
+      };
+      
+      if (requiresServerUrl && serverUrl) {
+        authData.server_url = serverUrl;
+      }
+      
+      await onSubmit(authData);
       // Only clear form and close if authentication was successful
       // The parent component will handle closing the modal on success
       if (!isAuthenticating) {
         setPlatform('github');
         setUsername('');
         setAccessToken('');
+        setServerUrl('');
       }
     }
   };
@@ -64,6 +79,36 @@ export const GitAuthModal: React.FC<GitAuthModalProps> = ({ isOpen, onClose, onS
               <FormSelectOption key="gitea" value="gitea" label="Gitea" />
             </FormSelect>
           </FormGroup>
+          
+          {(platform === 'gitlab' || platform === 'gitea') && (
+            <FormGroup 
+              label="Server URL" 
+              isRequired={platform === 'gitea'} 
+              fieldId="git-server-url"
+            >
+              <TextInput
+                type="text"
+                id="git-server-url"
+                name="git-server-url"
+                value={serverUrl}
+                onChange={(_event, value) => setServerUrl(value)}
+                placeholder={
+                  platform === 'gitlab' 
+                    ? 'https://gitlab.example.com (leave empty for gitlab.com)'
+                    : 'https://git.example.com (required for Gitea)'
+                }
+              />
+              <HelperText>
+                <HelperTextItem>
+                  {platform === 'gitlab' 
+                    ? 'Leave empty to use gitlab.com, or provide your self-hosted GitLab URL'
+                    : 'Provide your Gitea server URL (required for Gitea)'
+                  }
+                </HelperTextItem>
+              </HelperText>
+            </FormGroup>
+          )}
+          
           <FormGroup label="Username" isRequired fieldId="git-username">
             <TextInput
               isRequired
@@ -104,7 +149,7 @@ export const GitAuthModal: React.FC<GitAuthModalProps> = ({ isOpen, onClose, onS
           key="authenticate" 
           variant="primary" 
           onClick={handleSubmit}
-          isDisabled={isAuthenticating}
+          isDisabled={isAuthenticating || !platform || !username || !accessToken || ((platform === 'gitlab' || platform === 'gitea') && platform === 'gitea' && !serverUrl)}
           icon={isAuthenticating ? <Spinner size="sm" /> : undefined}
         >
           {isAuthenticating ? 'Authenticating...' : 'Authenticate'}

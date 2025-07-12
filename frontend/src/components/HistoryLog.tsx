@@ -160,18 +160,46 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({
           return;
         }
         
-        // Create git PR instead of direct database update
-        const result = await api.tagPromptAsProd(projectId, prodItem.id);
-        console.log('PR created:', result);
-        
-        // Show success notification with link to PR
-        if (onNotification) {
-          onNotification({
-            title: 'Pull Request Created Successfully',
-            variant: 'success',
-            message: `PR #${result.pr_number} has been created. Click the link below to review and merge it.`,
-            actionLinks: [{ text: `View PR #${result.pr_number}`, url: result.pr_url }]
-          });
+        try {
+          // Create git PR instead of direct database update
+          const result = await api.tagPromptAsProd(projectId, prodItem.id);
+          console.log('PR created:', result);
+          
+          // Show success notification with link to PR
+          if (onNotification) {
+            onNotification({
+              title: 'Pull Request Created Successfully',
+              variant: 'success',
+              message: `PR #${result.pr_number} has been created. Click the link below to review and merge it.`,
+              actionLinks: [{ text: `View PR #${result.pr_number}`, url: result.pr_url }]
+            });
+          }
+        } catch (prError: any) {
+          // Handle platform-specific errors
+          if (prError.response?.status === 501) {
+            if (onNotification) {
+              onNotification({
+                title: 'Feature Not Available',
+                variant: 'warning',
+                message: `Pull request creation is not yet supported for ${gitUser?.git_platform}.`,
+              });
+            }
+            return; // Don't fall through to generic error handling
+          }
+          
+          // Handle empty repository error
+          if (prError.response?.status === 400 && prError.response?.data?.detail?.includes('git repository is empty')) {
+            if (onNotification) {
+              onNotification({
+                title: 'Empty Repository',
+                variant: 'warning',
+                message: prError.response.data.detail,
+              });
+            }
+            return; // Don't fall through to generic error handling
+          }
+          
+          throw prError; // Re-throw for generic error handling
         }
         
         // Invalidate cache and refresh pending PRs and prod history

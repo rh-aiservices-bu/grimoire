@@ -12,6 +12,7 @@ class User(Base):
     git_platform = Column(String, nullable=False)  # github, gitlab, gitea
     git_username = Column(String, nullable=False)
     git_access_token = Column(String, nullable=False)  # encrypted token
+    git_server_url = Column(String, nullable=True)  # For self-hosted GitLab/Gitea
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 class PendingPR(Base):

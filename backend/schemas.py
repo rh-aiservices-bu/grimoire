@@ -98,6 +98,7 @@ class UserResponse(BaseModel):
     id: int
     git_platform: str
     git_username: str
+    git_server_url: Optional[str] = None
     created_at: datetime
     
     class Config:
@@ -119,6 +120,7 @@ class GitAuthRequest(BaseModel):
     platform: str  # github, gitlab, gitea
     username: str
     access_token: str
+    server_url: Optional[str] = None  # Required for GitLab/Gitea self-hosted instances
 
 class ProdPromptData(BaseModel):
     user_prompt: str

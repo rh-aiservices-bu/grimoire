@@ -108,7 +108,7 @@ async def create_project(project: ProjectCreate, db: Session = Depends(get_db)):
     # If git repo URL is provided, create initial PR
     if project.gitRepoUrl:
         # Get current user (for now, just get the first user - in production you'd get from session)
-        user = db.query(User).first()
+        user = db.query(User).order_by(User.created_at.desc()).first()
         if user:
             try:
                 token = git_service.decrypt_token(user.git_access_token)
@@ -163,8 +163,10 @@ async def delete_project(project_id: int, db: Session = Depends(get_db)):
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
-    # Delete all associated prompt history first (cascade delete)
+    # Delete all associated data first (cascade delete)
     db.query(PromptHistory).filter(PromptHistory.project_id == project_id).delete()
+    db.query(GitCommitCache).filter(GitCommitCache.project_id == project_id).delete()
+    db.query(PendingPR).filter(PendingPR.project_id == project_id).delete()
     
     # Delete the project
     db.delete(project)
@@ -336,14 +338,21 @@ async def generate_response(
                 stream=True,
             )
             
+            # Send initial message to confirm streaming started
+            chunk = f"data: {json.dumps({'delta': '', 'status': 'started'})}\n\n"
+            q.put(chunk)
+            
             for r in response:
+                print(f"Received response chunk: {type(r)} - {r}")
                 if hasattr(r, 'event') and hasattr(r.event, 'delta') and hasattr(r.event.delta, 'text'):
                     chunk_text = r.event.delta.text
+                    print(f"Text chunk: {chunk_text}")
                     full_response += chunk_text
                     chunk = f"data: {json.dumps({'delta': chunk_text})}\n\n"
                     q.put(chunk)
                 elif hasattr(r, 'event') and hasattr(r.event, 'delta') and hasattr(r.event.delta, 'content'):
                     chunk_text = r.event.delta.content
+                    print(f"Content chunk: {chunk_text}")
                     full_response += chunk_text
                     chunk = f"data: {json.dumps({'delta': chunk_text})}\n\n"
                     q.put(chunk)
@@ -385,7 +394,16 @@ async def generate_response(
                 break
             yield chunk
     
-    return StreamingResponse(streamer(), media_type="text/event-stream")
+    return StreamingResponse(
+        streamer(), 
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "*",
+        }
+    )
 
 
 @app.get("/api/debug/projects", tags=["Debug"])
@@ -474,7 +492,7 @@ async def get_prod_prompt(project_name: str, provider_id: str, db: Session = Dep
     
     # If project has git repo, try to get from git first
     if project.git_repo_url:
-        user = db.query(User).first()
+        user = db.query(User).order_by(User.created_at.desc()).first()
         if user:
             try:
                 token = git_service.decrypt_token(user.git_access_token)
@@ -609,10 +627,23 @@ async def get_latest_prompt(
 @app.post("/api/git/auth", response_model=UserResponse, tags=["Git"])
 async def authenticate_git(auth_request: GitAuthRequest, db: Session = Depends(get_db)):
     """Authenticate with git platform and store credentials"""
+    # Validate required fields for each platform
+    if auth_request.platform == 'gitea' and not auth_request.server_url:
+        raise HTTPException(status_code=400, detail="Server URL is required for Gitea")
+    
     # Test the credentials first
-    test_repo = "https://github.com/octocat/Hello-World"  # Public repo for testing
-    if not git_service.test_git_access(auth_request.platform, auth_request.username, auth_request.access_token, test_repo):
-        raise HTTPException(status_code=401, detail="Invalid git credentials")
+    test_repo = None
+    if auth_request.platform == 'github':
+        test_repo = "https://github.com/octocat/Hello-World"  # Public repo for testing
+    elif auth_request.platform == 'gitlab':
+        test_repo = "https://gitlab.com/gitlab-org/gitlab"  # Public GitLab repo
+    elif auth_request.platform == 'gitea' and auth_request.server_url:
+        # For Gitea, we'll use a dummy repo URL since test_git_access will use the user endpoint
+        test_repo = f"{auth_request.server_url}/dummy/repo"  # Won't be used, just needed for function call
+    
+    # Always test credentials if we have the required information
+    if test_repo and not git_service.test_git_access(auth_request.platform, auth_request.username, auth_request.access_token, test_repo, auth_request.server_url):
+        raise HTTPException(status_code=401, detail="Invalid git credentials or insufficient permissions")
     
     # Check if user already exists
     existing_user = db.query(User).filter(
@@ -623,6 +654,7 @@ async def authenticate_git(auth_request: GitAuthRequest, db: Session = Depends(g
     if existing_user:
         # Update existing user
         existing_user.git_access_token = git_service.encrypt_token(auth_request.access_token)
+        existing_user.git_server_url = auth_request.server_url
         db.commit()
         db.refresh(existing_user)
         user = existing_user
@@ -632,7 +664,8 @@ async def authenticate_git(auth_request: GitAuthRequest, db: Session = Depends(g
         db_user = User(
             git_platform=auth_request.platform,
             git_username=auth_request.username,
-            git_access_token=encrypted_token
+            git_access_token=encrypted_token,
+            git_server_url=auth_request.server_url
         )
         db.add(db_user)
         db.commit()
@@ -657,7 +690,7 @@ async def authenticate_git(auth_request: GitAuthRequest, db: Session = Depends(g
 @app.post("/api/git/sync-all", tags=["Git"])
 async def sync_all_git_projects(db: Session = Depends(get_db)):
     """Manually trigger sync for all projects with git repos"""
-    user = db.query(User).first()
+    user = db.query(User).order_by(User.created_at.desc()).first()
     if not user:
         raise HTTPException(status_code=404, detail="No authenticated git user found")
     
@@ -681,7 +714,7 @@ async def sync_all_git_projects(db: Session = Depends(get_db)):
 @app.get("/api/git/user", response_model=UserResponse, tags=["Git"])
 async def get_current_git_user(db: Session = Depends(get_db)):
     """Get current authenticated git user"""
-    user = db.query(User).first()  # In production, get from session
+    user = db.query(User).order_by(User.created_at.desc()).first()  # In production, get from session
     if not user:
         raise HTTPException(status_code=404, detail="No authenticated git user found")
     return user
@@ -696,7 +729,7 @@ async def test_git_repo_access(project_id: int, db: Session = Depends(get_db)):
     if not project.git_repo_url:
         raise HTTPException(status_code=400, detail="Project has no git repository configured")
     
-    user = db.query(User).first()  # In production, get from session
+    user = db.query(User).order_by(User.created_at.desc()).first()  # In production, get from session
     if not user:
         raise HTTPException(status_code=404, detail="No authenticated git user found")
     
@@ -735,12 +768,15 @@ async def tag_prompt_as_prod(
     if not project.git_repo_url:
         raise HTTPException(status_code=400, detail="Project has no git repository configured")
     
-    # Get current user
-    user = db.query(User).first()  # In production, get from session
+    # Get current user (most recently authenticated)
+    user = db.query(User).order_by(User.created_at.desc()).first()  # In production, get from session
     if not user:
         raise HTTPException(status_code=404, detail="No authenticated git user found")
     
     try:
+        # All platforms now support PR creation
+        print(f"Creating production PR for platform: {user.git_platform}")
+        
         # Prepare prompt data
         variables = None
         if history_item.variables:
@@ -792,7 +828,12 @@ async def tag_prompt_as_prod(
         }
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create production PR: {str(e)}")
+        error_msg = str(e)
+        # Handle empty repository error specifically
+        if "EMPTY_REPOSITORY:" in error_msg:
+            cleaned_msg = error_msg.replace("EMPTY_REPOSITORY: ", "")
+            raise HTTPException(status_code=400, detail=cleaned_msg)
+        raise HTTPException(status_code=500, detail=f"Failed to create production PR: {error_msg}")
 
 @app.get("/api/projects/{project_id}/pending-prs", response_model=List[PendingPRResponse], tags=["Git"])
 async def get_pending_prs(project_id: int, db: Session = Depends(get_db)):
@@ -804,7 +845,7 @@ async def get_pending_prs(project_id: int, db: Session = Depends(get_db)):
     if not project.git_repo_url:
         return []
     
-    user = db.query(User).first()
+    user = db.query(User).order_by(User.created_at.desc()).first()
     if not user:
         return []
     
@@ -850,7 +891,7 @@ async def sync_pr_status(project_id: int, db: Session = Depends(get_db)):
     if not project.git_repo_url:
         return {"message": "Project has no git repository configured"}
     
-    user = db.query(User).first()
+    user = db.query(User).order_by(User.created_at.desc()).first()
     if not user:
         return {"message": "No authenticated git user found"}
     
@@ -895,17 +936,42 @@ async def sync_git_commits_for_project(project_id: int, db: Session, user: User)
         return
     
     try:
-        token = git_service.decrypt_token(user.git_access_token)
+        print(f"🚀 Starting sync for project {project_id}")
+        print(f"   Project name: {project.name}")
+        print(f"   Provider ID: {project.provider_id}")
+        print(f"   Git repo: {project.git_repo_url}")
+        print(f"   User platform: {user.git_platform}")
+        
+        print(f"🔐 Decrypting token...")
+        try:
+            token = git_service.decrypt_token(user.git_access_token)
+            print(f"🔐 Token decrypted successfully")
+        except Exception as decrypt_error:
+            print(f"❌ Token decryption failed: {decrypt_error}")
+            print(f"❌ This usually means you need to re-authenticate with git")
+            # Instead of raising error, just return empty - user needs to re-authenticate
+            return
+            
         file_path = f"{project.name}/{project.provider_id}/prompt_prod.json"
         
+        print(f"   Looking for file: {file_path}")
+        
         # Get latest commits from git
-        commits = git_service.get_file_commit_history(
-            user.git_platform,
-            token,
-            project.git_repo_url,
-            file_path,
-            limit=50  # Get more commits to ensure we catch everything
-        )
+        print(f"🔍 Calling get_file_commit_history...")
+        try:
+            commits = git_service.get_file_commit_history(
+                user.git_platform,
+                token,
+                project.git_repo_url,
+                file_path,
+                limit=50  # Get more commits to ensure we catch everything
+            )
+            print(f"🔍 Got {len(commits)} commits from git")
+        except Exception as git_error:
+            print(f"❌ Error in get_file_commit_history: {git_error}")
+            import traceback
+            traceback.print_exc()
+            raise git_error
         
         # Get existing commit SHAs from database
         existing_shas = set()
@@ -964,24 +1030,44 @@ async def sync_git_commits_for_project(project_id: int, db: Session, user: User)
             print(f"No new commits to cache for project {project_id}")
             
     except Exception as e:
-        print(f"Failed to sync git commits for project {project_id}: {e}")
+        print(f"❌ Failed to sync git commits for project {project_id}: {e}")
+        print(f"❌ Exception type: {type(e)}")
+        import traceback
+        traceback.print_exc()
         db.rollback()
 
 @app.get("/api/projects/{project_id}/prod-history", response_model=List[PromptHistoryResponse], tags=["Git"])
 async def get_prod_history_from_git(project_id: int, db: Session = Depends(get_db)):
     """Get production prompt history from cached git commits with incremental sync"""
+    print(f"📋 GET /api/projects/{project_id}/prod-history called")
+    
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
+    print(f"📋 Project found: {project.name}, git_repo: {project.git_repo_url}")
+    
     if not project.git_repo_url:
+        print(f"📋 No git repo configured, returning empty history")
         return []  # No git repo, return empty history
     
-    user = db.query(User).first()  # In production, get from session
+    user = db.query(User).order_by(User.created_at.desc()).first()  # In production, get from session
     if not user:
+        print(f"📋 No authenticated user found, returning empty history")
         return []  # No authenticated user, return empty history
     
+    print(f"📋 User found: {user.git_username}@{user.git_platform}")
+    
     try:
+        # First, test if the user's token can be decrypted
+        try:
+            git_service.decrypt_token(user.git_access_token)
+        except Exception as decrypt_error:
+            print(f"❌ Token decryption test failed: {decrypt_error}")
+            print(f"❌ User needs to re-authenticate with git")
+            # Return empty history with a message that auth is needed
+            return []
+        
         # First, sync any new commits
         await sync_git_commits_for_project(project_id, db, user)
         

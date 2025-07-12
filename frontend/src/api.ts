@@ -128,8 +128,11 @@ export const api = {
           if (line.startsWith('data: ')) {
             try {
               const data = JSON.parse(line.slice(6));
-              if (data.delta) {
+              console.log('Received SSE data:', data);
+              if (data.delta && data.delta !== '') {
                 onChunk(data.delta);
+              } else if (data.status === 'started') {
+                console.log('Streaming started');
               } else if (data.error) {
                 onError(data.error);
                 return;
@@ -155,6 +158,7 @@ export const api = {
     platform: string;
     username: string;
     access_token: string;
+    server_url?: string;
   }): Promise<GitUser> => {
     const response = await axios.post(`${API_BASE}/git/auth`, data);
     return response.data;

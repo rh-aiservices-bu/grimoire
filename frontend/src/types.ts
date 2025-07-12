@@ -35,6 +35,7 @@ export interface GitUser {
   id: number;
   git_platform: string;
   git_username: string;
+  git_server_url?: string;
   created_at: string;
 }
 
