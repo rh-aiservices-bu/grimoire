@@ -8,12 +8,13 @@ import re
 import asyncio
 import threading
 import queue
+from datetime import datetime
 
 from llama_stack_client import LlamaStackClient
 from llama_stack_client.lib.inference.event_logger import EventLogger
 
 from database import get_db
-from models import Project, PromptHistory, User, PendingPR
+from models import Project, PromptHistory, User, PendingPR, GitCommitCache
 from schemas import (
     ProjectCreate, ProjectUpdate, ProjectResponse, 
     PromptHistoryCreate, PromptHistoryResponse, PromptHistoryUpdate,
@@ -624,7 +625,7 @@ async def authenticate_git(auth_request: GitAuthRequest, db: Session = Depends(g
         existing_user.git_access_token = git_service.encrypt_token(auth_request.access_token)
         db.commit()
         db.refresh(existing_user)
-        return existing_user
+        user = existing_user
     else:
         # Create new user
         encrypted_token = git_service.encrypt_token(auth_request.access_token)
@@ -636,7 +637,46 @@ async def authenticate_git(auth_request: GitAuthRequest, db: Session = Depends(g
         db.add(db_user)
         db.commit()
         db.refresh(db_user)
-        return db_user
+        user = db_user
+    
+    # Trigger initial sync for all projects with git repos
+    print("Triggering initial git sync for all projects...")
+    projects_with_git = db.query(Project).filter(Project.git_repo_url.isnot(None)).all()
+    
+    for project in projects_with_git:
+        try:
+            print(f"Initial sync for project {project.id}: {project.name}")
+            await sync_git_commits_for_project(project.id, db, user)
+        except Exception as e:
+            print(f"Failed initial sync for project {project.id}: {e}")
+            # Continue with other projects even if one fails
+    
+    print(f"Initial git sync completed for {len(projects_with_git)} projects")
+    return user
+
+@app.post("/api/git/sync-all", tags=["Git"])
+async def sync_all_git_projects(db: Session = Depends(get_db)):
+    """Manually trigger sync for all projects with git repos"""
+    user = db.query(User).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="No authenticated git user found")
+    
+    projects_with_git = db.query(Project).filter(Project.git_repo_url.isnot(None)).all()
+    
+    sync_results = []
+    for project in projects_with_git:
+        try:
+            print(f"Manual sync for project {project.id}: {project.name}")
+            await sync_git_commits_for_project(project.id, db, user)
+            sync_results.append({"project_id": project.id, "status": "success"})
+        except Exception as e:
+            print(f"Failed manual sync for project {project.id}: {e}")
+            sync_results.append({"project_id": project.id, "status": "failed", "error": str(e)})
+    
+    return {
+        "message": f"Sync completed for {len(projects_with_git)} projects",
+        "results": sync_results
+    }
 
 @app.get("/api/git/user", response_model=UserResponse, tags=["Git"])
 async def get_current_git_user(db: Session = Depends(get_db)):
@@ -848,9 +888,88 @@ async def sync_pr_status(project_id: int, db: Session = Depends(get_db)):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to sync PR statuses: {str(e)}")
 
+async def sync_git_commits_for_project(project_id: int, db: Session, user: User) -> None:
+    """Incrementally sync git commits for a project"""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project or not project.git_repo_url:
+        return
+    
+    try:
+        token = git_service.decrypt_token(user.git_access_token)
+        file_path = f"{project.name}/{project.provider_id}/prompt_prod.json"
+        
+        # Get latest commits from git
+        commits = git_service.get_file_commit_history(
+            user.git_platform,
+            token,
+            project.git_repo_url,
+            file_path,
+            limit=50  # Get more commits to ensure we catch everything
+        )
+        
+        # Get existing commit SHAs from database
+        existing_shas = set()
+        existing_commits = db.query(GitCommitCache).filter(
+            GitCommitCache.project_id == project_id
+        ).all()
+        existing_shas = {commit.commit_sha for commit in existing_commits}
+        
+        print(f"Project {project_id}: Found {len(commits)} git commits, {len(existing_shas)} already cached")
+        
+        # Process only new commits
+        new_commits_count = 0
+        for commit in commits:
+            if commit['sha'] not in existing_shas:
+                # This is a new commit, fetch its content and cache it
+                try:
+                    prompt_data = git_service.get_file_content_at_commit(
+                        user.git_platform,
+                        token,
+                        project.git_repo_url,
+                        file_path,
+                        commit['sha']
+                    )
+                    
+                    if prompt_data:
+                        # Store in cache
+                        commit_date = datetime.fromisoformat(commit['date'].replace('Z', '+00:00'))
+                        cached_commit = GitCommitCache(
+                            project_id=project_id,
+                            commit_sha=commit['sha'],
+                            commit_message=commit['message'],
+                            commit_date=commit_date,
+                            author=commit['author'],
+                            prompt_data=json.dumps({
+                                'user_prompt': prompt_data.user_prompt,
+                                'system_prompt': prompt_data.system_prompt,
+                                'variables': prompt_data.variables,
+                                'temperature': prompt_data.temperature,
+                                'max_len': prompt_data.max_len,
+                                'top_p': prompt_data.top_p,
+                                'top_k': prompt_data.top_k,
+                                'created_at': prompt_data.created_at
+                            })
+                        )
+                        db.add(cached_commit)
+                        new_commits_count += 1
+                        
+                except Exception as e:
+                    print(f"Failed to cache commit {commit['sha']}: {e}")
+                    continue
+        
+        if new_commits_count > 0:
+            db.commit()
+            print(f"Cached {new_commits_count} new commits for project {project_id}")
+        else:
+            print(f"No new commits to cache for project {project_id}")
+            
+    except Exception as e:
+        print(f"Failed to sync git commits for project {project_id}: {e}")
+        db.rollback()
+
 @app.get("/api/projects/{project_id}/prod-history", response_model=List[PromptHistoryResponse], tags=["Git"])
 async def get_prod_history_from_git(project_id: int, db: Session = Depends(get_db)):
-    """Get production prompt history from git repository showing all changes to the prompt file"""
+    """Get production prompt history from cached git commits with incremental sync"""
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -862,77 +981,59 @@ async def get_prod_history_from_git(project_id: int, db: Session = Depends(get_d
     if not user:
         return []  # No authenticated user, return empty history
     
-    history_items = []
-    
     try:
-        token = git_service.decrypt_token(user.git_access_token)
+        # First, sync any new commits
+        await sync_git_commits_for_project(project_id, db, user)
         
-        # Get git commit history for the production prompt file
-        file_path = f"{project.name}/{project.provider_id}/prompt_prod.json"
-        print(f"Getting commit history for file: {file_path}")
+        # Then, get cached commits from database (much faster!)
+        cached_commits = db.query(GitCommitCache).filter(
+            GitCommitCache.project_id == project_id
+        ).order_by(GitCommitCache.commit_date.desc()).limit(20).all()
         
-        commits = git_service.get_file_commit_history(
-            user.git_platform,
-            token,
-            project.git_repo_url,
-            file_path,
-            limit=20
-        )
+        print(f"Retrieved {len(cached_commits)} cached commits for project {project_id}")
         
-        print(f"Found {len(commits)} commits for production prompt file")
-        
-        # Convert each commit to PromptHistoryResponse
-        for i, commit in enumerate(commits):
+        history_items = []
+        for i, cached_commit in enumerate(cached_commits):
             try:
-                # Get the prompt content at this commit
-                prompt_data = git_service.get_file_content_at_commit(
-                    user.git_platform,
-                    token,
-                    project.git_repo_url,
-                    file_path,
-                    commit['sha']
-                )
+                # Parse cached prompt data
+                prompt_data_dict = json.loads(cached_commit.prompt_data)
                 
-                if prompt_data:
-                    # Determine commit type from message
-                    commit_msg = commit['message']
-                    if "🚀" in commit_msg or "Update production prompt" in commit_msg:
-                        notes = f"🚀 PR merge: {commit_msg[:80]}{'...' if len(commit_msg) > 80 else ''}"
-                        commit_type = "pr"
-                    elif "✨" in commit_msg or "Initialize project" in commit_msg:
-                        notes = f"✨ Project setup: {commit_msg[:80]}{'...' if len(commit_msg) > 80 else ''}"
-                        commit_type = "init"
-                    else:
-                        notes = f"📝 Direct commit: {commit_msg[:80]}{'...' if len(commit_msg) > 80 else ''}"
-                        commit_type = "direct"
-                    
-                    # Add current badge to the most recent commit
-                    if i == 0:
-                        notes = f"⚡ CURRENT - {notes}"
-                    
-                    commit_response = PromptHistoryResponse(
-                        id=hash(commit['sha']) % 100000,  # Generate consistent ID from commit SHA
-                        project_id=project_id,
-                        user_prompt=prompt_data.user_prompt,
-                        system_prompt=prompt_data.system_prompt,
-                        variables=prompt_data.variables,
-                        temperature=prompt_data.temperature,
-                        max_len=prompt_data.max_len,
-                        top_p=prompt_data.top_p,
-                        top_k=prompt_data.top_k,
-                        response=None,
-                        rating=None,
-                        notes=notes,
-                        is_prod=True,
-                        created_at=commit['date']
-                    )
-                    history_items.append(commit_response)
-                    
+                # Determine commit type from message
+                commit_msg = cached_commit.commit_message
+                if "🚀" in commit_msg or "Update production prompt" in commit_msg:
+                    notes = f"🚀 PR merge: {commit_msg[:80]}{'...' if len(commit_msg) > 80 else ''}"
+                elif "✨" in commit_msg or "Initialize project" in commit_msg:
+                    notes = f"✨ Project setup: {commit_msg[:80]}{'...' if len(commit_msg) > 80 else ''}"
+                else:
+                    notes = f"📝 Direct commit: {commit_msg[:80]}{'...' if len(commit_msg) > 80 else ''}"
+                
+                # Add current badge to the most recent commit
+                if i == 0:
+                    notes = f"⚡ CURRENT - {notes}"
+                
+                commit_response = PromptHistoryResponse(
+                    id=hash(cached_commit.commit_sha) % 100000,
+                    project_id=project_id,
+                    user_prompt=prompt_data_dict.get('user_prompt', ''),
+                    system_prompt=prompt_data_dict.get('system_prompt', ''),
+                    variables=prompt_data_dict.get('variables', {}),
+                    temperature=prompt_data_dict.get('temperature', 0.7),
+                    max_len=prompt_data_dict.get('max_len', 2048),
+                    top_p=prompt_data_dict.get('top_p', 0.9),
+                    top_k=prompt_data_dict.get('top_k', 50),
+                    response=None,
+                    rating=None,
+                    notes=notes,
+                    is_prod=True,
+                    created_at=cached_commit.commit_date.isoformat()
+                )
+                history_items.append(commit_response)
+                
             except Exception as e:
-                print(f"Failed to get content for commit {commit['sha']}: {e}")
+                print(f"Failed to process cached commit {cached_commit.commit_sha}: {e}")
                 continue
         
-        print(f"Successfully processed {len(history_items)} commits into history items")
+        print(f"Successfully processed {len(history_items)} cached commits into history items")
         return history_items
             
     except Exception as e:

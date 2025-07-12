@@ -11,26 +11,31 @@ import {
   ModalHeader,
   FormSelect,
   FormSelectOption,
+  Spinner,
 } from '@patternfly/react-core';
 
 interface GitAuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: { platform: string; username: string; access_token: string }) => void;
+  onSubmit: (data: { platform: string; username: string; access_token: string }) => Promise<void>;
+  isAuthenticating?: boolean;
 }
 
-export const GitAuthModal: React.FC<GitAuthModalProps> = ({ isOpen, onClose, onSubmit }) => {
+export const GitAuthModal: React.FC<GitAuthModalProps> = ({ isOpen, onClose, onSubmit, isAuthenticating = false }) => {
   const [platform, setPlatform] = useState('github');
   const [username, setUsername] = useState('');
   const [accessToken, setAccessToken] = useState('');
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (platform && username && accessToken) {
-      onSubmit({ platform, username, access_token: accessToken });
-      setPlatform('github');
-      setUsername('');
-      setAccessToken('');
-      onClose();
+      await onSubmit({ platform, username, access_token: accessToken });
+      // Only clear form and close if authentication was successful
+      // The parent component will handle closing the modal on success
+      if (!isAuthenticating) {
+        setPlatform('github');
+        setUsername('');
+        setAccessToken('');
+      }
     }
   };
 
@@ -95,10 +100,16 @@ export const GitAuthModal: React.FC<GitAuthModalProps> = ({ isOpen, onClose, onS
         </div>
       </ModalBody>
       <ModalFooter>
-        <Button key="authenticate" variant="primary" onClick={handleSubmit}>
-          Authenticate
+        <Button 
+          key="authenticate" 
+          variant="primary" 
+          onClick={handleSubmit}
+          isDisabled={isAuthenticating}
+          icon={isAuthenticating ? <Spinner size="sm" /> : undefined}
+        >
+          {isAuthenticating ? 'Authenticating...' : 'Authenticate'}
         </Button>
-        <Button key="cancel" variant="link" onClick={onClose}>
+        <Button key="cancel" variant="link" onClick={onClose} isDisabled={isAuthenticating}>
           Cancel
         </Button>
       </ModalFooter>

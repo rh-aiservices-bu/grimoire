@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Card,
   CardTitle,
@@ -19,8 +19,9 @@ import {
   FormSelect,
   FormSelectOption,
   Alert,
+  Spinner,
 } from '@patternfly/react-core';
-import { ThumbsUpIcon, ThumbsDownIcon, EditIcon, StarIcon } from '@patternfly/react-icons';
+import { ThumbsUpIcon, ThumbsDownIcon, EditIcon, StarIcon, SyncAltIcon } from '@patternfly/react-icons';
 import { PromptHistory, PendingPR, GitUser } from '../types';
 import { NotesModal } from './NotesModal';
 import { ProdConfirmationModal } from './ProdConfirmationModal';
@@ -53,6 +54,32 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({ history, onHistoryUpdate
   const [prodHistory, setProdHistory] = useState<PromptHistory[]>([]);
   const [pendingPRs, setPendingPRs] = useState<PendingPR[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isCreatingPR, setIsCreatingPR] = useState(false);
+  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Cache for production history and pending PRs
+  const prodHistoryCache = useRef<Map<number, { data: PromptHistory[]; timestamp: number }>>(new Map());
+  const pendingPRsCache = useRef<Map<number, { data: PendingPR[]; timestamp: number }>>(new Map());
+  const CACHE_DURATION = 60000; // 60 seconds cache (backend is now smarter with incremental sync)
+  const MAX_CACHE_SIZE = 10; // Limit cache to prevent memory growth
+  
+  // Cache cleanup utility
+  const cleanupCache = (cache: Map<number, { data: any; timestamp: number }>) => {
+    const now = Date.now();
+    // Remove expired entries
+    for (const [key, value] of cache.entries()) {
+      if (now - value.timestamp > CACHE_DURATION) {
+        cache.delete(key);
+      }
+    }
+    // Remove oldest entries if cache is too large
+    if (cache.size > MAX_CACHE_SIZE) {
+      const entries = Array.from(cache.entries()).sort((a, b) => a[1].timestamp - b[1].timestamp);
+      const entriesToRemove = entries.slice(0, cache.size - MAX_CACHE_SIZE);
+      entriesToRemove.forEach(([key]) => cache.delete(key));
+    }
+  };
 
   const handleItemClick = (item: PromptHistory) => {
     setSelectedItem(item);
@@ -106,6 +133,7 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({ history, onHistoryUpdate
   const handleProdConfirm = async () => {
     if (!prodItem) return;
     
+    setIsCreatingPR(true);
     try {
       if (hasGitRepo && !prodItem.is_prod) {
         // Check if user is authenticated with git
@@ -131,10 +159,13 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({ history, onHistoryUpdate
           });
         }
         
-        // Refresh pending PRs and prod history
+        // Invalidate cache and refresh pending PRs and prod history
+        console.log('PR created - invalidating cache and refreshing data');
+        prodHistoryCache.current.delete(projectId);
+        pendingPRsCache.current.delete(projectId);
+        
         if (viewMode === 'prod') {
-          loadPendingPRs();
-          loadProdHistory();
+          await Promise.all([loadPendingPRs(true), loadProdHistory(false, true)]);
         }
       } else {
         // Original behavior for projects without git repo
@@ -155,35 +186,95 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({ history, onHistoryUpdate
           } : undefined
         });
       }
+    } finally {
+      setIsCreatingPR(false);
     }
   };
 
-  const loadProdHistory = async () => {
+  const loadProdHistory = async (isManualRefresh = false, forceRefresh = false) => {
     if (!hasGitRepo) return;
     
-    setIsLoading(true);
+    // Check cache first (unless manual refresh or force refresh)
+    if (!isManualRefresh && !forceRefresh) {
+      const cached = prodHistoryCache.current.get(projectId);
+      if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+        console.log(`Using cached prod history for project ${projectId}`);
+        setProdHistory(cached.data);
+        return;
+      }
+    }
+    
+    if (isManualRefresh) {
+      setIsRefreshing(true);
+    } else {
+      setIsLoading(true);
+    }
+    
     try {
+      console.log(`Fetching fresh prod history for project ${projectId}`);
       const gitHistory = await api.getProdHistoryFromGit(projectId);
       setProdHistory(gitHistory);
+      
+      // Cache the result
+      prodHistoryCache.current.set(projectId, {
+        data: gitHistory,
+        timestamp: Date.now()
+      });
+      
+      // Cleanup cache periodically
+      cleanupCache(prodHistoryCache.current);
     } catch (error) {
       console.error('Failed to load prod history from git:', error);
       setProdHistory([]);
     } finally {
-      setIsLoading(false);
+      if (isManualRefresh) {
+        setIsRefreshing(false);
+      } else {
+        setIsLoading(false);
+      }
     }
   };
 
-  const loadPendingPRs = async () => {
+  const loadPendingPRs = async (forceRefresh = false) => {
     if (!hasGitRepo || !gitUser) return;
     
+    // Check cache first (unless force refresh)
+    if (!forceRefresh) {
+      const cached = pendingPRsCache.current.get(projectId);
+      if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+        console.log(`Using cached pending PRs for project ${projectId}`);
+        setPendingPRs(cached.data);
+        return;
+      }
+    }
+    
     try {
+      console.log(`Fetching fresh pending PRs for project ${projectId}`);
       // This now does live checking automatically
       const prs = await api.getPendingPRs(projectId);
       setPendingPRs(prs);
+      
+      // Cache the result
+      pendingPRsCache.current.set(projectId, {
+        data: prs,
+        timestamp: Date.now()
+      });
+      
+      // Cleanup cache periodically
+      cleanupCache(pendingPRsCache.current);
     } catch (error) {
       console.error('Failed to load pending PRs:', error);
       setPendingPRs([]);
     }
+  };
+
+  const handleManualRefresh = async () => {
+    if (!hasGitRepo || !gitUser) return;
+    console.log('Manual refresh triggered - bypassing cache');
+    await Promise.all([
+      loadProdHistory(true, true), // isManualRefresh=true, forceRefresh=true
+      loadPendingPRs(true) // forceRefresh=true
+    ]);
   };
 
   // Auto-refresh prod data when git user changes or view mode changes
@@ -193,6 +284,30 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({ history, onHistoryUpdate
       loadPendingPRs();
     }
   }, [gitUser, viewMode, hasGitRepo]);
+
+  // Set up auto-refresh interval for production view
+  useEffect(() => {
+    // Clear any existing interval
+    if (refreshIntervalRef.current) {
+      clearInterval(refreshIntervalRef.current);
+    }
+
+    // Set up new interval if conditions are met
+    if (viewMode === 'prod' && hasGitRepo && gitUser) {
+      refreshIntervalRef.current = setInterval(() => {
+        console.log('Auto-refreshing production history (force refresh)...');
+        loadProdHistory(false, true); // isManualRefresh=false, forceRefresh=true
+        loadPendingPRs(true); // forceRefresh=true
+      }, 30000); // 30 seconds
+    }
+
+    // Cleanup function
+    return () => {
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+      }
+    };
+  }, [viewMode, hasGitRepo, gitUser, projectId]);
 
   const handleViewModeChange = (mode: 'experimental' | 'prod') => {
     setViewMode(mode);
@@ -212,15 +327,33 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({ history, onHistoryUpdate
             <FlexItem>History Log</FlexItem>
             {hasGitRepo && (
               <FlexItem>
-                <FormSelect
-                  value={viewMode}
-                  onChange={(_event, value) => handleViewModeChange(value as 'experimental' | 'prod')}
-                  aria-label="Select history view"
-                  style={{ width: '150px' }}
-                >
-                  <FormSelectOption key="experimental" value="experimental" label="Experimental" />
-                  <FormSelectOption key="prod" value="prod" label="Production" />
-                </FormSelect>
+                <Flex spaceItems={{ default: 'spaceItemsSm' }}>
+                  {viewMode === 'prod' && gitUser && (
+                    <FlexItem>
+                      <Button
+                        variant="plain"
+                        size="sm"
+                        icon={isRefreshing ? <Spinner size="sm" /> : <SyncAltIcon />}
+                        onClick={handleManualRefresh}
+                        isDisabled={isRefreshing}
+                        title="Refresh production history from git"
+                      >
+                        {isRefreshing ? 'Refreshing...' : ''}
+                      </Button>
+                    </FlexItem>
+                  )}
+                  <FlexItem>
+                    <FormSelect
+                      value={viewMode}
+                      onChange={(_event, value) => handleViewModeChange(value as 'experimental' | 'prod')}
+                      aria-label="Select history view"
+                      style={{ width: '150px' }}
+                    >
+                      <FormSelectOption key="experimental" value="experimental" label="Experimental" />
+                      <FormSelectOption key="prod" value="prod" label="Production" />
+                    </FormSelect>
+                  </FlexItem>
+                </Flex>
               </FlexItem>
             )}
           </Flex>
@@ -367,13 +500,14 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({ history, onHistoryUpdate
                     <FlexItem>
                       <Button
                         variant={item.is_prod ? 'primary' : 'tertiary'}
-                        icon={<StarIcon />}
+                        icon={isCreatingPR && prodItem?.id === item.id ? <Spinner size="sm" /> : <StarIcon />}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleProdClick(item);
                         }}
                         size="sm"
                         title={item.is_prod ? 'Remove production tag' : 'Mark as production'}
+                        isDisabled={isCreatingPR && prodItem?.id === item.id}
                       />
                     </FlexItem>
                   </Flex>

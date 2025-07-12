@@ -24,6 +24,7 @@ function App() {
   const [error, setError] = useState('');
   const [gitUser, setGitUser] = useState<GitUser | null>(null);
   const [isGitAuthModalOpen, setIsGitAuthModalOpen] = useState(false);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [notifications, setNotifications] = useState<Array<{
     id: string;
     title: string;
@@ -116,6 +117,7 @@ function App() {
   };
 
   const handleGitAuth = async (data: { platform: string; username: string; access_token: string }) => {
+    setIsAuthenticating(true);
     try {
       const user = await api.authenticateGit(data);
       setGitUser(user);
@@ -134,6 +136,8 @@ function App() {
         message: 'Please check your credentials and ensure your access token has repository permissions.'
       });
       console.error('Git authentication failed:', error);
+    } finally {
+      setIsAuthenticating(false);
     }
   };
 
@@ -160,8 +164,9 @@ function App() {
       />
       <GitAuthModal
         isOpen={isGitAuthModalOpen}
-        onClose={() => setIsGitAuthModalOpen(false)}
+        onClose={() => !isAuthenticating && setIsGitAuthModalOpen(false)}
         onSubmit={handleGitAuth}
+        isAuthenticating={isAuthenticating}
       />
     </>
   );

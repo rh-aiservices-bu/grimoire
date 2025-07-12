@@ -42,6 +42,21 @@ class Project(Base):
     # Relationship to prompt history
     prompt_history = relationship("PromptHistory", back_populates="project")
 
+class GitCommitCache(Base):
+    __tablename__ = "git_commit_cache"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    commit_sha = Column(String, nullable=False, index=True)
+    commit_message = Column(Text, nullable=False)
+    commit_date = Column(DateTime, nullable=False)
+    author = Column(String, nullable=False)
+    prompt_data = Column(Text, nullable=True)  # JSON string of the prompt content
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    
+    # Relationship to project
+    project = relationship("Project", backref="git_commits")
+
 class PromptHistory(Base):
     __tablename__ = "prompt_history"
     
