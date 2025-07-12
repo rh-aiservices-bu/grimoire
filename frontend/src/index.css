@@ -22,12 +22,23 @@ a:hover {
   color: #535bf2;
 }
 
+html {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
+  padding: 0;
   min-width: 320px;
   min-height: 100vh;
   width: 100%;
   max-width: 100%;
+  height: 100vh;
+  overflow-x: hidden;
 }
 
 #root {
@@ -39,16 +50,102 @@ body {
 .pf-c-page {
   width: 100% !important;
   max-width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 .pf-c-page__main {
   width: 100% !important;
   max-width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 .pf-c-page__main-section {
   width: 100% !important;
   max-width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Remove any PatternFly sidebar or navigation spacing */
+.pf-c-page__sidebar {
+  display: none !important;
+}
+
+.pf-c-page__header {
+  display: none !important;
+}
+
+/* Ensure PageSection fills full width */
+.pf-c-page__main-section {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+/* Force all container elements to use full width */
+.pf-l-grid,
+.pf-l-grid__item,
+.pf-c-page__main-container {
+  width: 100% !important;
+  max-width: 100% !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+/* Override any PatternFly layout constraints */
+.pf-l-split,
+.pf-l-split__item {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+/* Nuclear option: ensure no element creates gray margins */
+* {
+  box-sizing: border-box;
+}
+
+/* PatternFly container overrides */
+.pf-c-page,
+.pf-c-page *,
+.pf-c-page__main,
+.pf-c-page__main *,
+.pf-l-grid,
+.pf-l-grid *,
+.pf-l-split,
+.pf-l-split * {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+/* Ensure the main layout div uses full width */
+div[style*="display: flex"] {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+/* Custom scrollbar styling for History Log */
+div[style*="overflowY: auto"] {
+  scrollbar-width: thin;
+  scrollbar-color: #888 #f1f1f1;
+}
+
+div[style*="overflowY: auto"]::-webkit-scrollbar {
+  width: 8px;
+}
+
+div[style*="overflowY: auto"]::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+div[style*="overflowY: auto"]::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+div[style*="overflowY: auto"]::-webkit-scrollbar-thumb:hover {
+  background: #555;
 }
 
 h1 {

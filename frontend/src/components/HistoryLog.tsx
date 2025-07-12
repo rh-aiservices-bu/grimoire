@@ -431,7 +431,11 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({
               }
             </p>
           ) : (
-            <div>
+            <div style={{ 
+              maxHeight: 'calc(100vh - 300px)', 
+              overflowY: 'auto',
+              paddingRight: '0.5rem'
+            }}>
               {currentHistory.map((item, index) => (
                 <div 
                   key={item.id}

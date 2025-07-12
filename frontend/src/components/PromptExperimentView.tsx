@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Page,
-  PageSection,
   Grid,
   GridItem,
   Card,
@@ -296,50 +294,41 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
   };
 
   return (
-    <Page style={{ width: '100%', maxWidth: '100%' }}>
-      <PageSection style={{ 
-        paddingLeft: '1rem', 
-        paddingRight: '1rem',
-        maxWidth: '100%',
-        width: '100%'
+    <div style={{ 
+      width: '100vw', 
+      height: '100vh', 
+      margin: 0, 
+      padding: 0,
+      backgroundColor: '#f0f0f0',
+      overflow: 'hidden'
+    }}>
+      {/* Header Section */}
+      <div style={{ 
+        padding: '1rem',
+        backgroundColor: 'white',
+        borderBottom: '1px solid #d2d2d2'
       }}>
-        <Split hasGutter>
-          <SplitItem isFilled>
-            <Title headingLevel="h1" size="2xl">{currentProject.name}</Title>
-            <small>
-              Model: {currentProject.provider_id} | URL: {currentProject.llamastack_url}
-            </small>
-          </SplitItem>
-          <SplitItem>
-            <Button variant="secondary" onClick={() => setIsEditModalOpen(true)}>
-              Edit Project
-            </Button>
-          </SplitItem>
-          <SplitItem>
-            <Button variant="danger" onClick={() => setIsDeleteModalOpen(true)}>
-              Delete Project
-            </Button>
-          </SplitItem>
-          <SplitItem>
-            <Button variant="tertiary" onClick={() => setIsApiDocModalOpen(true)}>
-              API Docs
-            </Button>
-          </SplitItem>
-        </Split>
-      </PageSection>
+        <Title headingLevel="h1" size="2xl">{currentProject.name}</Title>
+        <small>
+          Model: {currentProject.provider_id} | URL: {currentProject.llamastack_url}
+        </small>
+      </div>
 
-      <PageSection style={{ 
-        paddingLeft: '1rem', 
-        paddingRight: '1rem',
-        maxWidth: '100%',
-        width: '100%'
+      {/* Main Content Section */}
+      <div style={{ 
+        width: '100%',
+        height: 'calc(100vh - 120px)',
+        padding: '0.5rem',
+        boxSizing: 'border-box'
       }}>
         <div style={{ 
           display: 'flex', 
-          gap: '1rem', 
+          gap: '0.5rem', 
           width: '100%',
           minHeight: 'calc(100vh - 200px)',
-          flexWrap: 'nowrap'
+          flexWrap: 'nowrap',
+          margin: 0,
+          padding: 0
         }}>
           {/* Projects Sidebar */}
           <div style={{ 
@@ -372,27 +361,74 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
                           padding: '0.5rem',
                           margin: '0.25rem 0',
                           borderRadius: '4px',
-                          cursor: 'pointer',
                           backgroundColor: proj.id === currentProject.id ? 'var(--pf-global--palette--blue-50)' : 'transparent',
                           border: proj.id === currentProject.id ? '2px solid var(--pf-global--palette--blue-300)' : '1px solid var(--pf-global--BorderColor--100)',
                           boxShadow: proj.id === currentProject.id ? '0 1px 4px rgba(0, 0, 0, 0.1)' : 'none',
                           transition: 'all 0.2s ease-in-out',
                         }}
-                        onClick={() => onProjectSelect?.(proj)}
                       >
-                        <div style={{ 
-                          fontWeight: proj.id === currentProject.id ? 'bold' : 'normal',
-                          fontSize: '0.875rem',
-                          marginBottom: '0.125rem'
-                        }}>
-                          {proj.name}
+                        <div 
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => onProjectSelect?.(proj)}
+                        >
+                          <div style={{ 
+                            fontWeight: proj.id === currentProject.id ? 'bold' : 'normal',
+                            fontSize: '0.875rem',
+                            marginBottom: '0.125rem'
+                          }}>
+                            {proj.name}
+                          </div>
+                          <small style={{ 
+                            color: 'var(--pf-global--Color--200)',
+                            fontSize: '0.75rem'
+                          }}>
+                            {proj.provider_id}
+                          </small>
                         </div>
-                        <small style={{ 
-                          color: 'var(--pf-global--Color--200)',
-                          fontSize: '0.75rem'
-                        }}>
-                          {proj.provider_id}
-                        </small>
+                        
+                        {/* Show action buttons only for the current project */}
+                        {proj.id === currentProject.id && (
+                          <div style={{ 
+                            marginTop: '0.5rem',
+                            display: 'flex',
+                            gap: '0.25rem',
+                            flexWrap: 'wrap'
+                          }}>
+                            <Button 
+                              variant="secondary" 
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setIsEditModalOpen(true);
+                              }}
+                              style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
+                            >
+                              Edit
+                            </Button>
+                            <Button 
+                              variant="danger" 
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setIsDeleteModalOpen(true);
+                              }}
+                              style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
+                            >
+                              Delete
+                            </Button>
+                            <Button 
+                              variant="tertiary" 
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setIsApiDocModalOpen(true);
+                              }}
+                              style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
+                            >
+                              API
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -633,7 +669,9 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
           <div style={{ 
             flex: '0 0 350px',
             minWidth: '350px',
-            maxWidth: '400px'
+            maxWidth: '400px',
+            height: '100%',
+            overflow: 'hidden'
           }}>
             <HistoryLog 
               history={history} 
@@ -648,7 +686,7 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
             />
           </div>
         </div>
-      </PageSection>
+      </div>
 
       <ProjectEditModal
         isOpen={isEditModalOpen}
@@ -669,6 +707,6 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
         isOpen={isApiDocModalOpen}
         onClose={() => setIsApiDocModalOpen(false)}
       />
-    </Page>
+    </div>
   );
 };
