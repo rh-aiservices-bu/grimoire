@@ -35,6 +35,7 @@ class Project(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
     llamastack_url = Column(String, nullable=False)
     provider_id = Column(String, nullable=False)
     git_repo_url = Column(String, nullable=True)

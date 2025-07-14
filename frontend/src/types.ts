@@ -1,6 +1,7 @@
 export interface Project {
   id: number;
   name: string;
+  description?: string;
   llamastack_url: string;
   provider_id: string;
   git_repo_url?: string;

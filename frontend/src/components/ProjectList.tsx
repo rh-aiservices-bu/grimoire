@@ -49,6 +49,13 @@ export const ProjectList: React.FC<ProjectListProps> = ({
             <Card isClickable onClick={() => onSelectProject(project)}>
               <CardTitle>{project.name}</CardTitle>
               <CardBody>
+                {project.description && (
+                  <>
+                    <p style={{ marginBottom: '1rem', color: '#666' }}>
+                      {project.description}
+                    </p>
+                  </>
+                )}
                 <small>
                   Provider: {project.provider_id}
                 </small>

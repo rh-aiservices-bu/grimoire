@@ -97,6 +97,7 @@ async def get_projects(db: Session = Depends(get_db)):
 async def create_project(project: ProjectCreate, db: Session = Depends(get_db)):
     db_project = Project(
         name=project.name,
+        description=project.description,
         llamastack_url=project.llamastackUrl,
         provider_id=project.providerId,
         git_repo_url=project.gitRepoUrl
@@ -146,6 +147,8 @@ async def update_project(
     # Update only provided fields
     if project_update.name is not None:
         project.name = project_update.name
+    if project_update.description is not None:
+        project.description = project_update.description
     if project_update.llamastackUrl is not None:
         project.llamastack_url = project_update.llamastackUrl
     if project_update.providerId is not None:

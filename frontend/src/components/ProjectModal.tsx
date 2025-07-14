@@ -6,6 +6,7 @@ import {
   Form,
   FormGroup,
   TextInput,
+  TextArea,
   ModalBody,
   ModalFooter,
   ModalHeader,
@@ -18,19 +19,27 @@ import { QuestionCircleIcon } from '@patternfly/react-icons';
 interface ProjectModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: { name: string; llamastackUrl: string; providerId: string; gitRepoUrl?: string }) => void;
+  onSubmit: (data: { name: string; description?: string; llamastackUrl: string; providerId: string; gitRepoUrl?: string }) => void;
 }
 
 export const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit }) => {
   const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
   const [llamastackUrl, setLlamastackUrl] = useState('');
   const [providerId, setProviderId] = useState('');
   const [gitRepoUrl, setGitRepoUrl] = useState('');
 
   const handleSubmit = () => {
     if (name && llamastackUrl && providerId) {
-      onSubmit({ name, llamastackUrl, providerId, gitRepoUrl: gitRepoUrl || undefined });
+      onSubmit({ 
+        name, 
+        description: description || undefined, 
+        llamastackUrl, 
+        providerId, 
+        gitRepoUrl: gitRepoUrl || undefined 
+      });
       setName('');
+      setDescription('');
       setLlamastackUrl('');
       setProviderId('');
       setGitRepoUrl('');
@@ -56,6 +65,16 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onS
               name="project-name"
               value={name}
               onChange={(_event, value) => setName(value)}
+            />
+          </FormGroup>
+          <FormGroup label="Description" fieldId="project-description">
+            <TextArea
+              id="project-description"
+              name="project-description"
+              value={description}
+              onChange={(_event, value) => setDescription(value)}
+              placeholder="Optional description of the project"
+              rows={3}
             />
           </FormGroup>
           <FormGroup label="Llama Stack URL" isRequired fieldId="llamastack-url">

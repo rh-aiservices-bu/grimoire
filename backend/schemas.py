@@ -4,12 +4,14 @@ from datetime import datetime
 
 class ProjectCreate(BaseModel):
     name: str
+    description: Optional[str] = None
     llamastackUrl: str
     providerId: str
     gitRepoUrl: Optional[str] = None
 
 class ProjectUpdate(BaseModel):
     name: Optional[str] = None
+    description: Optional[str] = None
     llamastackUrl: Optional[str] = None
     providerId: Optional[str] = None
     gitRepoUrl: Optional[str] = None
@@ -17,6 +19,7 @@ class ProjectUpdate(BaseModel):
 class ProjectResponse(BaseModel):
     id: int
     name: str
+    description: Optional[str] = None
     llamastack_url: str
     provider_id: str
     git_repo_url: Optional[str] = None

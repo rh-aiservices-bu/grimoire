@@ -12,6 +12,7 @@ export const api = {
 
   createProject: async (data: {
     name: string;
+    description?: string;
     llamastackUrl: string;
     providerId: string;
     gitRepoUrl?: string;
@@ -29,6 +30,7 @@ export const api = {
     id: number,
     data: {
       name?: string;
+      description?: string;
       llamastackUrl?: string;
       providerId?: string;
       gitRepoUrl?: string;
