@@ -39,6 +39,7 @@ class Project(Base):
     llamastack_url = Column(String, nullable=False)
     provider_id = Column(String, nullable=False)
     git_repo_url = Column(String, nullable=True)
+    test_backend_url = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     # Relationship to prompt history
@@ -79,3 +80,25 @@ class PromptHistory(Base):
     
     # Relationship to project
     project = relationship("Project", back_populates="prompt_history")
+
+class BackendTestHistory(Base):
+    __tablename__ = "backend_test_history"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    user_prompt = Column(Text, nullable=False)
+    system_prompt = Column(Text, nullable=True)
+    variables = Column(Text, nullable=True)  # JSON string
+    temperature = Column(Float, nullable=True)
+    max_len = Column(Integer, nullable=True)
+    top_p = Column(Float, nullable=True)
+    top_k = Column(Integer, nullable=True)
+    backend_response = Column(Text, nullable=True)
+    response_time_ms = Column(Integer, nullable=True)  # Response time in milliseconds
+    status_code = Column(Integer, nullable=True)  # HTTP status code from backend
+    error_message = Column(Text, nullable=True)  # Error message if test failed
+    is_test = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    
+    # Relationship to project
+    project = relationship("Project", backref="backend_test_history")

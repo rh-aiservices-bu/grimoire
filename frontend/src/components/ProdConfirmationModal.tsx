@@ -33,7 +33,7 @@ export const ProdConfirmationModal: React.FC<ProdConfirmationModalProps> = ({
   return (
     <Modal
       variant={ModalVariant.small}
-      title={isCurrentlyProd ? "Remove Production Tag" : "Mark as Production"}
+      title={isCurrentlyProd ? "Create Production PR" : "Mark as Test"}
       isOpen={isOpen}
       onClose={onClose}
       titleIconVariant={isCurrentlyProd ? "warning" : "info"}
@@ -44,18 +44,8 @@ export const ProdConfirmationModal: React.FC<ProdConfirmationModalProps> = ({
           {isCurrentlyProd ? (
             <>
               <p>
-                <ExclamationTriangleIcon style={{ marginRight: '8px', color: '#f0ab00' }} />
-                Are you sure you want to remove the production tag from this prompt?
-              </p>
-              <p style={{ marginTop: '16px' }}>
-                This will remove the <Badge><StarIcon style={{ fontSize: '12px', marginRight: '4px' }} />PROD</Badge> designation.
-              </p>
-            </>
-          ) : (
-            <>
-              <p>
                 <StarIcon style={{ marginRight: '8px', color: '#06c' }} />
-                Mark this prompt as production-ready?
+                Create a production pull request for this prompt?
               </p>
               <p style={{ marginTop: '16px' }}>
                 This will:
@@ -70,10 +60,36 @@ export const ProdConfirmationModal: React.FC<ProdConfirmationModalProps> = ({
                   </>
                 ) : (
                   <>
-                    <li>Add the <Badge><StarIcon style={{ fontSize: '12px', marginRight: '4px' }} />PROD</Badge> tag to this prompt</li>
-                    <li>Remove the production tag from any other prompt in this project</li>
-                    <li>Move this prompt to the top of the history list</li>
+                    <li>Mark this prompt as production-ready</li>
+                    <li>Move it to the production view</li>
                     <li>Make it accessible via the production API endpoint</li>
+                  </>
+                )}
+              </ul>
+            </>
+          ) : (
+            <>
+              <p>
+                <StarIcon style={{ marginRight: '8px', color: '#06c' }} />
+                Mark this prompt as test-ready?
+              </p>
+              <p style={{ marginTop: '16px' }}>
+                This will:
+              </p>
+              <ul style={{ marginTop: '8px', paddingLeft: '20px' }}>
+                {hasGitRepo ? (
+                  <>
+                    <li>Save the test settings to the configured git repository</li>
+                    <li>Create a git commit with the test configuration</li>
+                    <li>Make the test settings available for backend testing</li>
+                    <li>Enable the Prod button for creating production PRs</li>
+                  </>
+                ) : (
+                  <>
+                    <li>Add the <Badge><StarIcon style={{ fontSize: '12px', marginRight: '4px' }} />TEST</Badge> tag to this prompt</li>
+                    <li>Remove the test tag from any other prompt in this project</li>
+                    <li>Move this prompt to the top of the history list</li>
+                    <li>Enable the Prod button for production deployment</li>
                   </>
                 )}
               </ul>
@@ -83,7 +99,7 @@ export const ProdConfirmationModal: React.FC<ProdConfirmationModalProps> = ({
       </ModalBody>
       <ModalFooter>
         <Button key="confirm" variant="primary" onClick={handleConfirm}>
-          {isCurrentlyProd ? "Remove Tag" : hasGitRepo ? "Create Pull Request" : "Mark as Production"}
+          {isCurrentlyProd ? (hasGitRepo ? "Create Pull Request" : "Mark as Production") : (hasGitRepo ? "Save Test Settings to Git" : "Mark as Test")}
         </Button>
         <Button key="cancel" variant="link" onClick={onClose}>
           Cancel

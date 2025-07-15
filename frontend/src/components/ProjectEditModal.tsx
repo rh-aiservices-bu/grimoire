@@ -16,7 +16,7 @@ import { Project } from '../types';
 interface ProjectEditModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: { name: string; description?: string; llamastackUrl: string; providerId: string }) => void;
+  onSubmit: (data: { name: string; description?: string; llamastackUrl: string; providerId: string; testBackendUrl?: string }) => void;
   project: Project | null;
 }
 
@@ -30,6 +30,7 @@ export const ProjectEditModal: React.FC<ProjectEditModalProps> = ({
   const [description, setDescription] = useState('');
   const [llamastackUrl, setLlamastackUrl] = useState('');
   const [providerId, setProviderId] = useState('');
+  const [testBackendUrl, setTestBackendUrl] = useState('');
 
   useEffect(() => {
     if (project) {
@@ -37,6 +38,7 @@ export const ProjectEditModal: React.FC<ProjectEditModalProps> = ({
       setDescription(project.description || '');
       setLlamastackUrl(project.llamastack_url);
       setProviderId(project.provider_id);
+      setTestBackendUrl(project.test_backend_url || '');
     }
   }, [project]);
 
@@ -46,7 +48,8 @@ export const ProjectEditModal: React.FC<ProjectEditModalProps> = ({
         name, 
         description: description || undefined, 
         llamastackUrl, 
-        providerId 
+        providerId,
+        testBackendUrl: testBackendUrl || undefined
       });
       onClose();
     }
@@ -60,6 +63,7 @@ export const ProjectEditModal: React.FC<ProjectEditModalProps> = ({
       setDescription(project.description || '');
       setLlamastackUrl(project.llamastack_url);
       setProviderId(project.provider_id);
+      setTestBackendUrl(project.test_backend_url || '');
     }
   };
 
@@ -113,6 +117,19 @@ export const ProjectEditModal: React.FC<ProjectEditModalProps> = ({
               value={providerId}
               onChange={(_event, value) => setProviderId(value)}
               placeholder="llama-3.1-8b-instruct"
+            />
+          </FormGroup>
+          <FormGroup 
+            label={"Test Backend URL (Optional)"}
+            fieldId="test-backend-url"
+          >
+            <TextInput
+              type="url"
+              id="test-backend-url"
+              name="test-backend-url"
+              value={testBackendUrl}
+              onChange={(_event, value) => setTestBackendUrl(value)}
+              placeholder="http://backend:8080/chat"
             />
           </FormGroup>
         </Form>
