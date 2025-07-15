@@ -1172,12 +1172,14 @@ async def tag_backend_test_as_test(
         
         # Convert test data to settings format
         settings_data = {
+            "userPrompt": test_data.user_prompt,
             "systemPrompt": test_data.system_prompt,
             "variables": test_data.variables,
             "temperature": test_data.temperature,
             "maxLen": test_data.max_len,
             "topP": test_data.top_p,
-            "topK": test_data.top_k
+            "topK": test_data.top_k,
+            "created_at": test_data.created_at.isoformat()
         }
         
         # Save test settings to git
@@ -1186,6 +1188,7 @@ async def tag_backend_test_as_test(
             token,
             project.git_repo_url,
             project.name,
+            project.provider_id,
             settings_data
         )
         
@@ -1272,12 +1275,14 @@ async def tag_prompt_as_test(
         
         # Convert prompt data to settings format
         settings_data = {
+            "userPrompt": history_item.user_prompt,
             "systemPrompt": history_item.system_prompt,
             "variables": variables,
             "temperature": history_item.temperature,
             "maxLen": history_item.max_len,
             "topP": history_item.top_p,
-            "topK": history_item.top_k
+            "topK": history_item.top_k,
+            "created_at": history_item.created_at.isoformat()
         }
         
         print(f"🔍 tag_prompt_as_test: user platform={user.git_platform}")
@@ -1292,6 +1297,7 @@ async def tag_prompt_as_test(
             token,
             project.git_repo_url,
             project.name,
+            project.provider_id,
             settings_data
         )
         
@@ -1639,7 +1645,8 @@ async def get_test_settings(project_id: int, db: Session = Depends(get_db)):
                     user.git_platform,
                     token,
                     project.git_repo_url,
-                    project.name
+                    project.name,
+                    project.provider_id
                 )
                 
                 if test_settings:
@@ -1675,6 +1682,7 @@ async def save_test_settings(
         
         # Convert settings to dict
         settings_dict = {
+            "userPrompt": settings.userPrompt,
             "systemPrompt": settings.systemPrompt,
             "variables": settings.variables,
             "temperature": settings.temperature,
@@ -1689,6 +1697,7 @@ async def save_test_settings(
             token,
             project.git_repo_url,
             project.name,
+            project.provider_id,
             settings_dict
         )
         

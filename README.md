@@ -4,12 +4,14 @@ A web application built with PatternFly for experimenting with prompts using Lla
 
 ## Features
 
-- **Project Management**: Create and manage multiple projects with different Llama Stack configurations
+- **Project Management**: Create and manage multiple projects with different Llama Stack configurations and descriptions
 - **Prompt Experimentation**: Enter user and system prompts with template variable support
 - **Model Parameters**: Configure temperature, max_len, top_p, and top_k parameters
+- **Backend Testing**: Test prompts against configured backend URLs with streaming responses and performance metrics
 - **History Tracking**: View and manage your prompt/response history per project
 - **Git Integration**: Connect projects to GitHub/GitLab/Gitea repositories for version control
 - **Production Workflow**: Create Pull Requests for production prompt deployments
+- **Settings Management**: Store and retrieve test configurations from Git repositories
 - **Dual History Views**: Switch between experimental prompts and production git history
 - **Rating & Notes**: Rate prompts with thumbs up/down and add detailed notes
 - **Real-time Sync**: Auto-refresh production data from git repositories
@@ -54,8 +56,10 @@ A web application built with PatternFly for experimenting with prompts using Lla
 2. Click "Create New Project"
 3. Fill in:
    - **Project Name**: A descriptive name for your project
+   - **Description**: Optional description of your project
    - **Llama Stack URL**: Your Llama Stack server URL (e.g., `http://localhost:8000`)
    - **Provider ID**: The model name available in your Llama Stack instance (e.g., `llama-3.1-8b-instruct`)
+   - **Test Backend URL**: Optional URL for testing prompts against a specific backend
    - **Git Repository URL** (optional): Connect to GitHub/GitLab/Gitea for version-controlled production prompts
 
 ### Git Integration Setup
@@ -104,6 +108,28 @@ You can use template variables in both user and system prompts:
    city: New York
    ```
 
+### Backend Testing
+
+The application includes a comprehensive backend testing feature:
+
+1. **Access Testing**: Navigate to the "Backend Testing" tab in your project
+2. **Configure Test**: Set up your test parameters:
+   - User prompt with template variables
+   - System prompt
+   - Model parameters (temperature, max_len, top_p, top_k)
+   - Variable values
+3. **Run Tests**: Execute tests against your configured backend URL
+4. **Monitor Results**: View streaming responses with performance metrics
+5. **Save Settings**: Store test configurations in Git for team collaboration
+6. **Review History**: Track all backend test results with timestamps and performance data
+
+**Features:**
+- **Streaming Responses**: Real-time display of model outputs
+- **Performance Metrics**: Response time and HTTP status tracking
+- **Template Variables**: Full support for dynamic prompt testing
+- **Git Integration**: Version-controlled test settings
+- **History Tracking**: Persistent storage of all test results
+
 ## Deployment
 
 ### Container Build
@@ -148,6 +174,11 @@ Update `helm/values.yaml` to customize:
 ### Generation
 - `POST /api/projects/:id/generate` - Generate response using Llama Stack (streaming)
 
+### Backend Testing
+- `POST /api/projects/:id/test-backend` - Test backend with streaming responses
+- `GET /api/projects/:id/backend-history` - Get backend test history
+- `PUT /api/projects/:id/backend-history/:historyId` - Update backend test status
+
 ### External API
 - `GET /api/projects-models` - List all projects and models for integration
 - `GET /prompt/{project_name}/{provider_id}` - Get latest prompt configuration
@@ -156,13 +187,22 @@ Update `helm/values.yaml` to customize:
 ### Git Integration
 - `POST /api/git/auth` - Authenticate with git platform (GitHub/GitLab/Gitea)
 - `GET /api/git/user` - Get current authenticated git user
+- `GET /api/git/auth-status` - Check authentication status
+- `POST /api/git/sync-all` - Sync all git projects
 - `POST /api/projects/{id}/history/{historyId}/tag-prod` - Create production PR
+- `POST /api/projects/{id}/history/{historyId}/tag-test` - Save test settings to git
 - `GET /api/projects/{id}/pending-prs` - Get pending pull requests
 - `GET /api/projects/{id}/prod-history` - Get production history from git
 - `POST /api/projects/{id}/sync-prs` - Sync PR statuses from git
 
+### Settings Management
+- `GET /api/projects/{id}/test-settings` - Get test settings from git
+- `POST /api/projects/{id}/test-settings` - Save test settings to git
+
 ### Production Features
 - **Git-based Production Workflow**: Create Pull Requests for production deployments
+- **Backend Testing**: Comprehensive testing framework with streaming responses
+- **Settings Management**: Version-controlled test configurations
 - **Dual History Views**: Switch between experimental and production (git-based) history
 - **Real-time Sync**: Auto-refresh production data from git repositories every 30 seconds
 - **Smart Caching**: Optimized performance with incremental git synchronization
@@ -183,6 +223,10 @@ Update `helm/values.yaml` to customize:
 ├── frontend/               # React frontend with PatternFly
 │   ├── src/
 │   │   ├── components/    # React components
+│   │   │   ├── BackendTesting.tsx     # Backend testing interface
+│   │   │   ├── ProjectModal.tsx       # Project creation modal
+│   │   │   ├── ProjectEditModal.tsx   # Project editing modal
+│   │   │   └── ...                    # Other components
 │   │   ├── types.ts       # TypeScript interfaces
 │   │   ├── api.ts        # API client
 │   │   └── App.tsx       # Main application
@@ -191,6 +235,7 @@ Update `helm/values.yaml` to customize:
 │   ├── models.py         # SQLAlchemy database models
 │   ├── schemas.py        # Pydantic schemas
 │   ├── database.py       # Database connection
+│   ├── git_service.py    # Git integration service
 │   └── requirements.txt  # Python dependencies
 ├── helm/                 # Helm chart for Kubernetes
 ├── Containerfile         # Container build file

@@ -110,6 +110,41 @@ curl http://localhost:3001/prompt/newsummary/llama32-full/prod
 }
 ```
 
+### 5. Backend Testing
+```bash
+curl -X POST http://localhost:3001/api/projects/1/test-backend \
+  -H "Content-Type: application/json" \
+  -d '{
+    "test_backend_url": "http://localhost:8000",
+    "user_prompt": "Tell me about {{topic}}",
+    "system_prompt": "You are a helpful assistant",
+    "variables": {"topic": "machine learning"},
+    "temperature": 0.7,
+    "max_len": 500,
+    "top_p": 0.9,
+    "top_k": 50
+  }'
+```
+
+### 6. Get Test Settings from Git
+```bash
+curl http://localhost:3001/api/projects/1/test-settings
+```
+
+**Response Example:**
+```json
+{
+  "test_backend_url": "http://localhost:8000",
+  "user_prompt": "Tell me about {{topic}}",
+  "system_prompt": "You are a helpful assistant",
+  "variables": {"topic": "machine learning"},
+  "temperature": 0.7,
+  "max_len": 500,
+  "top_p": 0.9,
+  "top_k": 50
+}
+```
+
 ## 📋 Key External API Endpoints
 
 ### Projects and Models Discovery
@@ -130,6 +165,9 @@ curl http://localhost:3001/prompt/newsummary/llama32-full/prod
 
 ### Git Integration
 - **POST** `/api/git/auth` - Authenticate with git platform (GitHub/GitLab/Gitea)
+- **GET** `/api/git/user` - Get current authenticated git user
+- **GET** `/api/git/auth-status` - Check authentication status
+- **POST** `/api/git/sync-all` - Sync all git projects
 - **Tag**: `Git`
 - **Use Case**: Enable git-based production workflow
 - **Supports**: GitHub.com, GitHub Enterprise, GitLab.com, self-hosted GitLab, self-hosted Gitea
@@ -137,11 +175,27 @@ curl http://localhost:3001/prompt/newsummary/llama32-full/prod
 
 ### Production Workflow
 - **POST** `/api/projects/{id}/history/{historyId}/tag-prod` - Create production pull request
+- **POST** `/api/projects/{id}/history/{historyId}/tag-test` - Save test settings to git
 - **GET** `/api/projects/{id}/pending-prs` - Get pending pull requests with live status
 - **GET** `/api/projects/{id}/prod-history` - Get production history from git commits
 - **Tag**: `Git`
 - **Use Case**: Git-based production deployment workflow
 - **Platform Support**: GitHub, GitLab, and Gitea fully supported
+
+### Backend Testing
+- **POST** `/api/projects/{id}/test-backend` - Test backend with streaming responses
+- **GET** `/api/projects/{id}/backend-history` - Get backend test history
+- **PUT** `/api/projects/{id}/backend-history/{historyId}` - Update backend test status
+- **Tag**: `Backend Testing`
+- **Use Case**: Test prompts against configured backend URLs
+- **Features**: Streaming responses, performance metrics, template variables
+
+### Settings Management
+- **GET** `/api/projects/{id}/test-settings` - Get test settings from git
+- **POST** `/api/projects/{id}/test-settings` - Save test settings to git
+- **Tag**: `Settings`
+- **Use Case**: Git-based settings storage and retrieval
+- **Features**: Version control for configurations, team collaboration
 
 ## 🏷️ API Organization
 
@@ -150,7 +204,9 @@ Endpoints are organized into logical groups:
 - **📁 Projects** - Project CRUD operations
 - **📜 History** - Prompt history management  
 - **⚡ Generation** - Response generation (streaming)
+- **🧪 Backend Testing** - Backend testing and validation
 - **🔀 Git** - Git platform authentication and operations
+- **⚙️ Settings** - Git-based settings management
 - **🌍 External API** - Integration endpoints
 - **📖 Documentation** - API information
 
@@ -277,6 +333,46 @@ if (projects.length > 0) {
         }
     } catch (error) {
         console.log('Error getting production prompt:', error);
+    }
+    
+    // Test backend with streaming
+    const testResponse = await fetch(`http://localhost:3001/api/projects/${project.id}/test-backend`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            test_backend_url: 'http://localhost:8000',
+            user_prompt: 'Tell me about {{topic}}',
+            system_prompt: 'You are a helpful assistant',
+            variables: { topic: 'AI' },
+            temperature: 0.7,
+            max_len: 500,
+            top_p: 0.9,
+            top_k: 50
+        })
+    });
+    
+    if (testResponse.ok) {
+        const reader = testResponse.body.getReader();
+        const decoder = new TextDecoder();
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            const chunk = decoder.decode(value);
+            const lines = chunk.split('\n');
+            
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    const data = JSON.parse(line.slice(6));
+                    if (data.type === 'token') {
+                        console.log('Token:', data.content);
+                    } else if (data.type === 'done') {
+                        console.log('Response complete');
+                    }
+                }
+            }
+        }
     }
 }
 ```

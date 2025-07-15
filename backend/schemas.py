@@ -183,6 +183,7 @@ class TestPromptData(BaseModel):
     created_at: str
 
 class TestSettingsRequest(BaseModel):
+    userPrompt: Optional[str] = None
     systemPrompt: Optional[str] = None
     variables: Optional[Dict[str, str]] = None
     temperature: Optional[float] = 0.7
@@ -191,6 +192,7 @@ class TestSettingsRequest(BaseModel):
     topK: Optional[int] = 50
 
 class TestSettingsResponse(BaseModel):
+    userPrompt: Optional[str] = None
     systemPrompt: Optional[str] = None
     variables: Optional[Dict[str, str]] = None
     temperature: Optional[float] = 0.7

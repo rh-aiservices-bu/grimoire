@@ -317,6 +317,7 @@ export const api = {
 
   // Test Settings
   getTestSettings: async (projectId: number): Promise<{
+    userPrompt?: string;
     systemPrompt?: string;
     variables?: Record<string, string>;
     temperature?: number;
@@ -331,6 +332,7 @@ export const api = {
   saveTestSettings: async (
     projectId: number,
     settings: {
+      userPrompt?: string;
       systemPrompt?: string;
       variables?: Record<string, string>;
       temperature?: number;

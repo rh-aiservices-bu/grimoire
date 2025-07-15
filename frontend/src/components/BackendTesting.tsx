@@ -44,6 +44,7 @@ export const BackendTesting: React.FC<BackendTestingProps> = ({ project, onTestC
   const [success, setSuccess] = useState<string | null>(null);
   
   // Settings state (for modal)
+  const [userPromptModal, setUserPromptModal] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
   const [variables, setVariables] = useState<Record<string, string>>({});
   const [variableInput, setVariableInput] = useState('');
@@ -120,7 +121,7 @@ export const BackendTesting: React.FC<BackendTestingProps> = ({ project, onTestC
 
   const handleTestBackend = async () => {
     if (!userPrompt.trim()) {
-      setError('Please enter a user prompt');
+      setError('Please enter an input prompt');
       return;
     }
 
@@ -196,6 +197,9 @@ export const BackendTesting: React.FC<BackendTestingProps> = ({ project, onTestC
       const settings = await api.getTestSettings(project.id);
       
       // Update state with loaded settings
+      if (settings.userPrompt !== undefined) {
+        setUserPromptModal(settings.userPrompt);
+      }
       if (settings.systemPrompt !== undefined) {
         setSystemPrompt(settings.systemPrompt);
       }
@@ -243,6 +247,7 @@ export const BackendTesting: React.FC<BackendTestingProps> = ({ project, onTestC
     setIsSettingsSaving(true);
     try {
       const settingsToSave = {
+        userPrompt: userPromptModal || undefined,
         systemPrompt: systemPrompt || undefined,
         variables: Object.keys(variables).length > 0 ? variables : undefined,
         temperature: modelParams.temperature,
@@ -337,11 +342,11 @@ export const BackendTesting: React.FC<BackendTestingProps> = ({ project, onTestC
               </div>
 
               <Grid hasGutter>
-                {/* Left Side: User Prompt */}
+                {/* Left Side: Input Prompt */}
                 <GridItem span={6}>
-                  <Title headingLevel="h4" size="md" style={{ marginBottom: '1rem' }}>User Prompt</Title>
+                  <Title headingLevel="h4" size="md" style={{ marginBottom: '1rem' }}>Input Prompt</Title>
                   <Form>
-                    <FormGroup label="User Prompt" isRequired fieldId="user-prompt">
+                    <FormGroup label="Input Prompt" isRequired fieldId="user-prompt">
                       <TextArea
                         isRequired
                         id="user-prompt"
@@ -349,7 +354,7 @@ export const BackendTesting: React.FC<BackendTestingProps> = ({ project, onTestC
                         value={userPrompt || ''}
                         onChange={(_event, value) => setUserPrompt(value)}
                         rows={6}
-                        placeholder="Enter your user prompt here. Use {{variable_name}} for template variables."
+                        placeholder="Enter your input prompt here. Use {{variable_name}} for template variables."
                       />
                     </FormGroup>
                     
@@ -552,6 +557,17 @@ export const BackendTesting: React.FC<BackendTestingProps> = ({ project, onTestC
             )}
             
             <Form>
+              <FormGroup label="User Prompt" fieldId="modal-user-prompt">
+                <TextArea
+                  id="modal-user-prompt"
+                  name="modal-user-prompt"
+                  value={userPromptModal || ''}
+                  onChange={(_event, value) => setUserPromptModal(value)}
+                  rows={4}
+                  placeholder="User prompt. Use {{variable_name}} for template variables."
+                />
+              </FormGroup>
+
               <FormGroup label="System Prompt" fieldId="modal-system-prompt">
                 <TextArea
                   id="modal-system-prompt"

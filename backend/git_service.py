@@ -959,7 +959,7 @@ class GitService:
             print(f"Failed to get file content at commit: {e}")
             return None
     
-    def get_test_settings_from_git(self, platform: str, token: str, repo_url: str, project_name: str) -> Optional[Dict]:
+    def get_test_settings_from_git(self, platform: str, token: str, repo_url: str, project_name: str, provider_id: str) -> Optional[Dict]:
         """Get test settings from git repository"""
         try:
             _, owner, repo = self.parse_git_url(repo_url)
@@ -967,7 +967,7 @@ class GitService:
             
             headers = self.get_auth_headers(platform, token)
             
-            file_path = f"{project_name}_test.json"
+            file_path = f"{project_name}/{provider_id}/prompt_test.json"
             
             if platform == 'github':
                 file_url = f"{api_base}/repos/{owner}/{repo}/contents/{file_path}"
@@ -1012,13 +1012,14 @@ class GitService:
             print(f"Failed to get test settings from git: {e}")
             return None
     
-    def save_test_settings_to_git(self, platform: str, token: str, repo_url: str, project_name: str, settings: Dict) -> Dict:
+    def save_test_settings_to_git(self, platform: str, token: str, repo_url: str, project_name: str, provider_id: str, settings: Dict) -> Dict:
         """Save test settings to git repository"""
         try:
             print(f"🔍 Starting save_test_settings_to_git:")
             print(f"🔍 Platform: {platform}")
             print(f"🔍 Repo URL: {repo_url}")
             print(f"🔍 Project name: {project_name}")
+            print(f"🔍 Provider ID: {provider_id}")
             print(f"🔍 Settings: {settings}")
             
             _, owner, repo = self.parse_git_url(repo_url)
@@ -1030,7 +1031,7 @@ class GitService:
             headers = self.get_auth_headers(platform, token)
             print(f"🔍 Headers: {headers}")
             
-            file_path = f"{project_name}_test.json"
+            file_path = f"{project_name}/{provider_id}/prompt_test.json"
             file_content = json.dumps(settings, indent=2)
             encoded_content = base64.b64encode(file_content.encode()).decode()
             print(f"🔍 File path: {file_path}")
@@ -1048,7 +1049,7 @@ class GitService:
                 
                 # Create or update file
                 data = {
-                    "message": f"Update test settings for {project_name}",
+                    "message": f"Update test settings for {project_name}/{provider_id}",
                     "content": encoded_content,
                     "branch": "main"
                 }
@@ -1073,7 +1074,7 @@ class GitService:
                 data = {
                     "branch": "main",
                     "content": file_content,
-                    "commit_message": f"Update test settings for {project_name}"
+                    "commit_message": f"Update test settings for {project_name}/{provider_id}"
                 }
                 
                 if check_response.status_code == 200:
@@ -1121,7 +1122,7 @@ class GitService:
                 
                 file_data = {
                     "branch": default_branch,
-                    "message": f"Update test settings for {project_name}",
+                    "message": f"Update test settings for {project_name}/{provider_id}",
                     "content": encoded_content
                 }
                 
