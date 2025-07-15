@@ -115,9 +115,10 @@ class GitService:
                 _, owner, repo = self.parse_git_url(repo_url)
                 url = f"{api_base}/repos/{owner}/{repo}"
             elif platform == 'gitlab':
-                _, owner, repo = self.parse_git_url(repo_url)
-                # GitLab uses project ID or namespace/project format
-                url = f"{api_base}/projects/{owner}%2F{repo}"
+                # For GitLab, test authentication by checking user info instead of a specific repo
+                # since we don't know what repos the user has access to
+                url = f"{api_base}/user"
+                print(f"Testing GitLab authentication with user endpoint: {url}")
             elif platform == 'gitea':
                 # For Gitea, test authentication by checking user info instead of a specific repo
                 # since we don't know what public repos exist on the instance
@@ -127,7 +128,28 @@ class GitService:
             response = requests.get(url, headers=headers, timeout=10)
             print(f"Authentication test response: {response.status_code}")
             
-            if platform == 'gitea':
+            if platform == 'gitlab':
+                # For GitLab user endpoint, check if we get user info and username matches
+                if response.status_code == 200:
+                    try:
+                        user_data = response.json()
+                        returned_username = user_data.get('username')
+                        print(f"GitLab user info: {user_data}")
+                        # Verify the username matches (case-insensitive)
+                        if returned_username and returned_username.lower() == username.lower():
+                            return True
+                        else:
+                            print(f"Username mismatch: expected '{username}', got '{returned_username}'")
+                            return False
+                    except Exception as e:
+                        print(f"Failed to parse GitLab user response: {e}")
+                        return False
+                else:
+                    print(f"GitLab authentication failed with status: {response.status_code}")
+                    if response.status_code == 401:
+                        print("Invalid token or insufficient permissions")
+                    return False
+            elif platform == 'gitea':
                 # For Gitea user endpoint, check if we get user info and username matches
                 if response.status_code == 200:
                     try:
@@ -149,6 +171,7 @@ class GitService:
                         print("Invalid token or insufficient permissions")
                     return False
             else:
+                # For GitHub, check if we can access the public test repo
                 return response.status_code == 200
                 
         except Exception as e:
@@ -935,3 +958,205 @@ class GitService:
         except Exception as e:
             print(f"Failed to get file content at commit: {e}")
             return None
+    
+    def get_test_settings_from_git(self, platform: str, token: str, repo_url: str, project_name: str) -> Optional[Dict]:
+        """Get test settings from git repository"""
+        try:
+            _, owner, repo = self.parse_git_url(repo_url)
+            api_base = self.get_api_base_url(platform, repo_url)
+            
+            headers = self.get_auth_headers(platform, token)
+            
+            file_path = f"{project_name}_test.json"
+            
+            if platform == 'github':
+                file_url = f"{api_base}/repos/{owner}/{repo}/contents/{file_path}"
+                response = requests.get(file_url, headers=headers)
+                
+                if response.status_code == 200:
+                    file_data = response.json()
+                    content = base64.b64decode(file_data['content']).decode()
+                    return json.loads(content)
+                else:
+                    print(f"Test settings file not found: {response.status_code}")
+                    return None
+                    
+            elif platform == 'gitlab':
+                file_url = f"{api_base}/projects/{owner}%2F{repo}/repository/files/{file_path.replace('/', '%2F')}"
+                response = requests.get(file_url, headers=headers)
+                
+                if response.status_code == 200:
+                    file_data = response.json()
+                    content = base64.b64decode(file_data['content']).decode()
+                    return json.loads(content)
+                else:
+                    print(f"Test settings file not found: {response.status_code}")
+                    return None
+                    
+            elif platform == 'gitea':
+                file_url = f"{api_base}/repos/{owner}/{repo}/contents/{file_path}"
+                response = requests.get(file_url, headers=headers)
+                
+                if response.status_code == 200:
+                    file_data = response.json()
+                    content = base64.b64decode(file_data['content']).decode()
+                    return json.loads(content)
+                else:
+                    print(f"Test settings file not found: {response.status_code}")
+                    return None
+            else:
+                print(f"Unsupported platform: {platform}")
+                return None
+                
+        except Exception as e:
+            print(f"Failed to get test settings from git: {e}")
+            return None
+    
+    def save_test_settings_to_git(self, platform: str, token: str, repo_url: str, project_name: str, settings: Dict) -> Dict:
+        """Save test settings to git repository"""
+        try:
+            print(f"🔍 Starting save_test_settings_to_git:")
+            print(f"🔍 Platform: {platform}")
+            print(f"🔍 Repo URL: {repo_url}")
+            print(f"🔍 Project name: {project_name}")
+            print(f"🔍 Settings: {settings}")
+            
+            _, owner, repo = self.parse_git_url(repo_url)
+            print(f"🔍 Parsed URL - Owner: {owner}, Repo: {repo}")
+            
+            api_base = self.get_api_base_url(platform, repo_url)
+            print(f"🔍 API Base: {api_base}")
+            
+            headers = self.get_auth_headers(platform, token)
+            print(f"🔍 Headers: {headers}")
+            
+            file_path = f"{project_name}_test.json"
+            file_content = json.dumps(settings, indent=2)
+            encoded_content = base64.b64encode(file_content.encode()).decode()
+            print(f"🔍 File path: {file_path}")
+            print(f"🔍 File content length: {len(file_content)}")
+            print(f"🔍 File content: {file_content}")
+            print(f"🔍 Encoded content length: {len(encoded_content)}")
+            
+            # Check if file exists to get sha (for updates)
+            existing_sha = None
+            if platform == 'github':
+                check_url = f"{api_base}/repos/{owner}/{repo}/contents/{file_path}"
+                check_response = requests.get(check_url, headers=headers)
+                if check_response.status_code == 200:
+                    existing_sha = check_response.json()['sha']
+                
+                # Create or update file
+                data = {
+                    "message": f"Update test settings for {project_name}",
+                    "content": encoded_content,
+                    "branch": "main"
+                }
+                if existing_sha:
+                    data["sha"] = existing_sha
+                
+                response = requests.put(check_url, headers=headers, json=data)
+                
+                if response.status_code in [200, 201]:
+                    result = response.json()
+                    return {
+                        "commit_sha": result['commit']['sha'],
+                        "commit_url": result['commit']['html_url']
+                    }
+                else:
+                    raise Exception(f"Failed to save file: {response.text}")
+                    
+            elif platform == 'gitlab':
+                check_url = f"{api_base}/projects/{owner}%2F{repo}/repository/files/{file_path.replace('/', '%2F')}"
+                check_response = requests.get(check_url, headers=headers)
+                
+                data = {
+                    "branch": "main",
+                    "content": file_content,
+                    "commit_message": f"Update test settings for {project_name}"
+                }
+                
+                if check_response.status_code == 200:
+                    # File exists, update it
+                    response = requests.put(check_url, headers=headers, json=data)
+                else:
+                    # File doesn't exist, create it
+                    response = requests.post(check_url, headers=headers, json=data)
+                
+                if response.status_code in [200, 201]:
+                    result = response.json()
+                    return {
+                        "commit_sha": result.get('id', 'unknown'),
+                        "commit_url": f"{repo_url}/-/commit/{result.get('id', 'unknown')}"
+                    }
+                else:
+                    raise Exception(f"Failed to save file: {response.text}")
+                    
+            elif platform == 'gitea':
+                print(f"🔍 Gitea: Starting Gitea implementation")
+                
+                # For Gitea, we need to commit directly to main branch
+                # Get the main branch SHA first
+                repo_info_url = f"{api_base}/repos/{owner}/{repo}"
+                print(f"🔍 Gitea: Getting repo info from: {repo_info_url}")
+                repo_response = requests.get(repo_info_url, headers=headers)
+                print(f"🔍 Gitea: Repo info response: {repo_response.status_code}")
+                print(f"🔍 Gitea: Repo info response text: {repo_response.text}")
+                
+                if repo_response.status_code != 200:
+                    print(f"❌ Failed to get Gitea repo info: {repo_response.text}")
+                    raise Exception(f"Failed to get repository info: {repo_response.text}")
+                
+                repo_data = repo_response.json()
+                default_branch = repo_data['default_branch']
+                print(f"🔍 Gitea: Using default branch: {default_branch}")
+                print(f"🔍 Gitea: Full repo data: {repo_data}")
+                
+                # Check if file exists on the default branch
+                file_url = f"{api_base}/repos/{owner}/{repo}/contents/{file_path}"
+                print(f"🔍 Gitea: Checking file existence at: {file_url}")
+                existing_response = requests.get(file_url, headers=headers, params={'ref': default_branch})
+                print(f"🔍 Gitea: File check response: {existing_response.status_code}")
+                print(f"🔍 Gitea: File check response text: {existing_response.text}")
+                
+                file_data = {
+                    "branch": default_branch,
+                    "message": f"Update test settings for {project_name}",
+                    "content": encoded_content
+                }
+                
+                if existing_response.status_code == 200:
+                    # File exists, update it
+                    existing_data = existing_response.json()
+                    file_data["sha"] = existing_data["sha"]
+                    print(f"🔍 Gitea: File exists, updating with SHA: {existing_data['sha']}")
+                    print(f"🔍 Gitea: Update data: {file_data}")
+                    file_response = requests.put(file_url, headers=headers, json=file_data)
+                    action = "Update"
+                else:
+                    # File doesn't exist, create it
+                    print(f"🔍 Gitea: File doesn't exist, creating new file")
+                    print(f"🔍 Gitea: Create data: {file_data}")
+                    file_response = requests.post(file_url, headers=headers, json=file_data)
+                    action = "Create"
+                
+                print(f"🔍 Gitea: {action} response: {file_response.status_code}")
+                print(f"🔍 Gitea: {action} response headers: {file_response.headers}")
+                print(f"🔍 Gitea: {action} response text: {file_response.text}")
+                
+                if file_response.status_code in [200, 201]:
+                    result = file_response.json()
+                    print(f"🔍 Gitea: Success! Result: {result}")
+                    return {
+                        "commit_sha": result['commit']['sha'],
+                        "commit_url": result['commit']['html_url']
+                    }
+                else:
+                    print(f"❌ Gitea: Failed to {action.lower()} file")
+                    raise Exception(f"Failed to {action.lower()} file: {file_response.text}")
+            else:
+                raise Exception(f"Unsupported platform: {platform}")
+                
+        except Exception as e:
+            print(f"Failed to save test settings to git: {e}")
+            raise e

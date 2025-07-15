@@ -19,7 +19,7 @@ import { QuestionCircleIcon } from '@patternfly/react-icons';
 interface ProjectModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: { name: string; description?: string; llamastackUrl: string; providerId: string; gitRepoUrl?: string }) => void;
+  onSubmit: (data: { name: string; description?: string; llamastackUrl: string; providerId: string; gitRepoUrl?: string; testBackendUrl?: string }) => void;
 }
 
 export const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit }) => {
@@ -28,6 +28,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onS
   const [llamastackUrl, setLlamastackUrl] = useState('');
   const [providerId, setProviderId] = useState('');
   const [gitRepoUrl, setGitRepoUrl] = useState('');
+  const [testBackendUrl, setTestBackendUrl] = useState('');
 
   const handleSubmit = () => {
     if (name && llamastackUrl && providerId) {
@@ -36,13 +37,15 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onS
         description: description || undefined, 
         llamastackUrl, 
         providerId, 
-        gitRepoUrl: gitRepoUrl || undefined 
+        gitRepoUrl: gitRepoUrl || undefined,
+        testBackendUrl: testBackendUrl || undefined
       });
       setName('');
       setDescription('');
       setLlamastackUrl('');
       setProviderId('');
       setGitRepoUrl('');
+      setTestBackendUrl('');
       onClose();
     }
   };
@@ -126,6 +129,19 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onS
               value={gitRepoUrl}
               onChange={(_event, value) => setGitRepoUrl(value)}
               placeholder="https://github.com/username/repo"
+            />
+          </FormGroup>
+          <FormGroup 
+            label={"Test Backend URL (Optional)"}
+            fieldId="test-backend-url"
+          >
+            <TextInput
+              type="url"
+              id="test-backend-url"
+              name="test-backend-url"
+              value={testBackendUrl}
+              onChange={(_event, value) => setTestBackendUrl(value)}
+              placeholder="http://backend:8080/chat"
             />
           </FormGroup>
         </Form>

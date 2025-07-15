@@ -16,6 +16,9 @@ import {
   Split,
   SplitItem,
   NumberInput,
+  Tabs,
+  Tab,
+  TabTitleText,
 } from '@patternfly/react-core';
 import { Project, PromptHistory, ModelParameters, GitUser } from '../types';
 import { api } from '../api';
@@ -23,6 +26,7 @@ import { HistoryLog } from './HistoryLog';
 import { ProjectEditModal } from './ProjectEditModal';
 import { DeleteProjectModal } from './DeleteProjectModal';
 import { ApiDocumentationModal } from './ApiDocumentationModal';
+import { BackendTesting } from './BackendTesting';
 
 interface PromptExperimentViewProps {
   project: Project;
@@ -51,7 +55,7 @@ interface ProjectState {
   variableInput: string;
   modelParams: ModelParameters;
   response: string;
-  historyViewMode: 'experimental' | 'prod';
+  historyViewMode: 'development' | 'backend' | 'prod';
 }
 
 export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
@@ -83,7 +87,7 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
       top_k: 50,
     },
     response: '',
-    historyViewMode: 'experimental',
+    historyViewMode: 'development',
   });
   
   // Get state for current project
@@ -118,7 +122,7 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
   const [variableInput, setVariableInput] = useState(initialState.variableInput);
   const [modelParams, setModelParams] = useState<ModelParameters>(initialState.modelParams);
   const [response, setResponse] = useState(initialState.response);
-  const [historyViewMode, setHistoryViewMode] = useState<'experimental' | 'prod'>(initialState.historyViewMode);
+  const [historyViewMode, setHistoryViewMode] = useState<'development' | 'backend' | 'prod'>(initialState.historyViewMode);
   
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -127,6 +131,7 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isApiDocModalOpen, setIsApiDocModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [activeTab, setActiveTab] = useState('experiment');
   const [currentProject, setCurrentProject] = useState<Project>(project);
 
   useEffect(() => {
@@ -467,204 +472,253 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
             minWidth: '0'
           }}>
             <Card>
-              <CardTitle>Prompt Configuration</CardTitle>
               <CardBody>
-                <Form>
-                  <FormGroup label="User Prompt" isRequired fieldId="user-prompt">
-                    <TextArea
-                      isRequired
-                      id="user-prompt"
-                      name="user-prompt"
-                      value={userPrompt}
-                      onChange={(_event, value) => setUserPrompt(value)}
-                      rows={4}
-                      placeholder="Enter your prompt here. Use {{variable_name}} for template variables."
-                    />
-                  </FormGroup>
+                <Tabs activeKey={activeTab} onSelect={(_event, tabIndex) => setActiveTab(tabIndex as string)}>
+                  <Tab eventKey="experiment" title={<TabTitleText>Experiment</TabTitleText>}>
+                    <div style={{ padding: '1rem 0' }}>
+                      <Grid hasGutter>
+                        <GridItem span={6}>
+                          <Title headingLevel="h3" size="lg" style={{ marginBottom: '1rem' }}>Prompt Configuration</Title>
+                          <Form>
+                            <FormGroup label="User Prompt" isRequired fieldId="user-prompt">
+                              <TextArea
+                                isRequired
+                                id="user-prompt"
+                                name="user-prompt"
+                                value={userPrompt}
+                                onChange={(_event, value) => setUserPrompt(value)}
+                                rows={4}
+                                placeholder="Enter your prompt here. Use {{variable_name}} for template variables."
+                              />
+                            </FormGroup>
 
-                  <FormGroup label="System Prompt" fieldId="system-prompt">
-                    <TextArea
-                      id="system-prompt"
-                      name="system-prompt"
-                      value={systemPrompt}
-                      onChange={(_event, value) => setSystemPrompt(value)}
-                      rows={3}
-                      placeholder="Optional system prompt. Use {{variable_name}} for template variables."
-                    />
-                  </FormGroup>
+                            <FormGroup label="System Prompt" fieldId="system-prompt">
+                              <TextArea
+                                id="system-prompt"
+                                name="system-prompt"
+                                value={systemPrompt}
+                                onChange={(_event, value) => setSystemPrompt(value)}
+                                rows={3}
+                                placeholder="Optional system prompt. Use {{variable_name}} for template variables."
+                              />
+                            </FormGroup>
 
-                  <FormGroup 
-                    label="Variables" 
-                    fieldId="variables"
-                    helperText="Enter variables as key: value pairs, one per line. Use {{key}} in prompts to reference variables."
-                  >
-                    <TextArea
-                      id="variables"
-                      name="variables"
-                      value={variableInput}
-                      onChange={(_event, value) => handleVariableInputChange(value)}
-                      rows={3}
-                      placeholder="name: John Doe&#10;age: 30&#10;city: New York"
-                    />
-                  </FormGroup>
+                            <FormGroup 
+                              label="Variables" 
+                              fieldId="variables"
+                            >
+                              <div style={{ fontSize: '0.875rem', color: '#6a6e73', marginBottom: '0.5rem' }}>
+                                Enter variables as key: value pairs, one per line. Use {'{'}key{'}'} in prompts to reference variables.
+                              </div>
+                              <TextArea
+                                id="variables"
+                                name="variables"
+                                value={variableInput}
+                                onChange={(_event, value) => handleVariableInputChange(value)}
+                                rows={3}
+                                placeholder="name: John Doe&#10;age: 30&#10;city: New York"
+                              />
+                            </FormGroup>
 
-                  <Grid hasGutter style={{ marginBottom: '1rem' }}>
-                    <GridItem span={6}>
-                      <FormGroup label="Temperature" fieldId="temperature">
-                        <NumberInput
-                          value={modelParams.temperature}
-                          min={0}
-                          max={2}
-                          step={0.1}
-                          onMinus={() => setModelParams(prev => ({ 
-                            ...prev, 
-                            temperature: Math.max(0, prev.temperature - 0.1) 
-                          }))}
-                          onPlus={() => setModelParams(prev => ({ 
-                            ...prev, 
-                            temperature: Math.min(2, prev.temperature + 0.1) 
-                          }))}
-                          onChange={(event) => {
-                            const value = parseFloat((event.target as HTMLInputElement).value) || 0;
-                            setModelParams(prev => ({ ...prev, temperature: value }));
-                          }}
-                        />
-                      </FormGroup>
-                    </GridItem>
-                    <GridItem span={6}>
-                      <FormGroup label="Max Length" fieldId="max-len">
-                        <NumberInput
-                          value={modelParams.max_len}
-                          min={1}
-                          max={4000}
-                          step={100}
-                          onMinus={() => setModelParams(prev => ({ 
-                            ...prev, 
-                            max_len: Math.max(1, prev.max_len - 100) 
-                          }))}
-                          onPlus={() => setModelParams(prev => ({ 
-                            ...prev, 
-                            max_len: Math.min(4000, prev.max_len + 100) 
-                          }))}
-                          onChange={(event) => {
-                            const value = parseInt((event.target as HTMLInputElement).value) || 1;
-                            setModelParams(prev => ({ ...prev, max_len: value }));
-                          }}
-                        />
-                      </FormGroup>
-                    </GridItem>
-                  </Grid>
-                  
-                  <Grid hasGutter style={{ marginBottom: '1.5rem' }}>
-                    <GridItem span={6}>
-                      <FormGroup label="Top P" fieldId="top-p">
-                        <NumberInput
-                          value={modelParams.top_p}
-                          min={0}
-                          max={1}
-                          step={0.1}
-                          onMinus={() => setModelParams(prev => ({ 
-                            ...prev, 
-                            top_p: Math.max(0, prev.top_p - 0.1) 
-                          }))}
-                          onPlus={() => setModelParams(prev => ({ 
-                            ...prev, 
-                            top_p: Math.min(1, prev.top_p + 0.1) 
-                          }))}
-                          onChange={(event) => {
-                            const value = parseFloat((event.target as HTMLInputElement).value) || 0;
-                            setModelParams(prev => ({ ...prev, top_p: value }));
-                          }}
-                        />
-                      </FormGroup>
-                    </GridItem>
-                    <GridItem span={6}>
-                      <FormGroup label="Top K" fieldId="top-k">
-                        <NumberInput
-                          value={modelParams.top_k}
-                          min={1}
-                          max={100}
-                          step={5}
-                          onMinus={() => setModelParams(prev => ({ 
-                            ...prev, 
-                            top_k: Math.max(1, prev.top_k - 5) 
-                          }))}
-                          onPlus={() => setModelParams(prev => ({ 
-                            ...prev, 
-                            top_k: Math.min(100, prev.top_k + 5) 
-                          }))}
-                          onChange={(event) => {
-                            const value = parseInt((event.target as HTMLInputElement).value) || 1;
-                            setModelParams(prev => ({ ...prev, top_k: value }));
-                          }}
-                        />
-                      </FormGroup>
-                    </GridItem>
-                  </Grid>
+                            <Grid hasGutter style={{ marginBottom: '1rem' }}>
+                              <GridItem span={6}>
+                                <FormGroup label="Temperature" fieldId="temperature">
+                                  <NumberInput
+                                    value={modelParams.temperature}
+                                    min={0}
+                                    max={2}
+                                    step={0.1}
+                                    onMinus={() => setModelParams(prev => ({ 
+                                      ...prev, 
+                                      temperature: Math.max(0, prev.temperature - 0.1) 
+                                    }))}
+                                    onPlus={() => setModelParams(prev => ({ 
+                                      ...prev, 
+                                      temperature: Math.min(2, prev.temperature + 0.1) 
+                                    }))}
+                                    onChange={(event) => {
+                                      const value = parseFloat((event.target as HTMLInputElement).value) || 0;
+                                      setModelParams(prev => ({ ...prev, temperature: value }));
+                                    }}
+                                  />
+                                </FormGroup>
+                              </GridItem>
+                              <GridItem span={6}>
+                                <FormGroup label="Max Length" fieldId="max-len">
+                                  <NumberInput
+                                    value={modelParams.max_len}
+                                    min={1}
+                                    max={4000}
+                                    step={100}
+                                    onMinus={() => setModelParams(prev => ({ 
+                                      ...prev, 
+                                      max_len: Math.max(1, prev.max_len - 100) 
+                                    }))}
+                                    onPlus={() => setModelParams(prev => ({ 
+                                      ...prev, 
+                                      max_len: Math.min(4000, prev.max_len + 100) 
+                                    }))}
+                                    onChange={(event) => {
+                                      const value = parseInt((event.target as HTMLInputElement).value) || 1;
+                                      setModelParams(prev => ({ ...prev, max_len: value }));
+                                    }}
+                                  />
+                                </FormGroup>
+                              </GridItem>
+                            </Grid>
+                            
+                            <Grid hasGutter style={{ marginBottom: '1.5rem' }}>
+                              <GridItem span={6}>
+                                <FormGroup label="Top P" fieldId="top-p">
+                                  <NumberInput
+                                    value={modelParams.top_p}
+                                    min={0}
+                                    max={1}
+                                    step={0.1}
+                                    onMinus={() => setModelParams(prev => ({ 
+                                      ...prev, 
+                                      top_p: Math.max(0, prev.top_p - 0.1) 
+                                    }))}
+                                    onPlus={() => setModelParams(prev => ({ 
+                                      ...prev, 
+                                      top_p: Math.min(1, prev.top_p + 0.1) 
+                                    }))}
+                                    onChange={(event) => {
+                                      const value = parseFloat((event.target as HTMLInputElement).value) || 0;
+                                      setModelParams(prev => ({ ...prev, top_p: value }));
+                                    }}
+                                  />
+                                </FormGroup>
+                              </GridItem>
+                              <GridItem span={6}>
+                                <FormGroup label="Top K" fieldId="top-k">
+                                  <NumberInput
+                                    value={modelParams.top_k}
+                                    min={1}
+                                    max={100}
+                                    step={5}
+                                    onMinus={() => setModelParams(prev => ({ 
+                                      ...prev, 
+                                      top_k: Math.max(1, prev.top_k - 5) 
+                                    }))}
+                                    onPlus={() => setModelParams(prev => ({ 
+                                      ...prev, 
+                                      top_k: Math.min(100, prev.top_k + 5) 
+                                    }))}
+                                    onChange={(event) => {
+                                      const value = parseInt((event.target as HTMLInputElement).value) || 1;
+                                      setModelParams(prev => ({ ...prev, top_k: value }));
+                                    }}
+                                  />
+                                </FormGroup>
+                              </GridItem>
+                            </Grid>
 
-                  {/* Preview section */}
-                  {userPrompt && Object.keys(variables).length > 0 && (
-                    <Card style={{ marginBottom: '1rem', backgroundColor: 'var(--pf-global--palette--blue-50)', maxHeight: '300px' }}>
-                      <CardTitle>Preview (with variables)</CardTitle>
-                      <CardBody style={{ maxHeight: '250px', overflowY: 'auto' }}>
-                        <strong>User Prompt:</strong>
-                        <div style={{ 
-                          backgroundColor: 'white', 
-                          padding: '0.5rem', 
-                          border: '1px solid var(--pf-global--BorderColor--100)',
-                          borderRadius: '4px',
-                          marginTop: '0.25rem',
-                          marginBottom: '0.5rem',
-                          maxHeight: '100px',
-                          overflowY: 'auto'
-                        }}>
-                          {processTemplateVariables(userPrompt, variables)}
-                        </div>
-                        {systemPrompt && (
-                          <>
-                            <strong>System Prompt:</strong>
-                            <div style={{ 
-                              backgroundColor: 'white', 
-                              padding: '0.5rem', 
-                              border: '1px solid var(--pf-global--BorderColor--100)',
-                              borderRadius: '4px',
-                              marginTop: '0.25rem',
-                              maxHeight: '100px',
-                              overflowY: 'auto'
-                            }}>
-                              {processTemplateVariables(systemPrompt, variables)}
-                            </div>
-                          </>
-                        )}
-                      </CardBody>
-                    </Card>
-                  )}
+                            {/* Preview section */}
+                            {userPrompt && Object.keys(variables).length > 0 && (
+                              <Card style={{ marginBottom: '1rem', backgroundColor: 'var(--pf-global--palette--blue-50)', maxHeight: '300px' }}>
+                                <CardTitle>Preview (with variables)</CardTitle>
+                                <CardBody style={{ maxHeight: '250px', overflowY: 'auto' }}>
+                                  <strong>User Prompt:</strong>
+                                  <div style={{ 
+                                    backgroundColor: 'white', 
+                                    padding: '0.5rem', 
+                                    border: '1px solid var(--pf-global--BorderColor--100)',
+                                    borderRadius: '4px',
+                                    marginTop: '0.25rem',
+                                    marginBottom: '0.5rem',
+                                    maxHeight: '100px',
+                                    overflowY: 'auto'
+                                  }}>
+                                    {processTemplateVariables(userPrompt, variables)}
+                                  </div>
+                                  {systemPrompt && (
+                                    <>
+                                      <strong>System Prompt:</strong>
+                                      <div style={{ 
+                                        backgroundColor: 'white', 
+                                        padding: '0.5rem', 
+                                        border: '1px solid var(--pf-global--BorderColor--100)',
+                                        borderRadius: '4px',
+                                        marginTop: '0.25rem',
+                                        maxHeight: '100px',
+                                        overflowY: 'auto'
+                                      }}>
+                                        {processTemplateVariables(systemPrompt, variables)}
+                                      </div>
+                                    </>
+                                  )}
+                                </CardBody>
+                              </Card>
+                            )}
 
-                  <Button 
-                    variant="primary" 
-                    onClick={handleGenerate}
-                    isDisabled={isLoading || !userPrompt.trim()}
-                  >
-                    {isLoading ? <Spinner size="sm" /> : 'Generate Response'}
-                  </Button>
-                </Form>
+                            <Button 
+                              variant="primary" 
+                              onClick={handleGenerate}
+                              isDisabled={isLoading || !userPrompt.trim()}
+                            >
+                              {isLoading ? <Spinner size="sm" /> : 'Generate Response'}
+                            </Button>
 
-                {error && (
-                  <Alert variant="danger" title="Error" style={{ marginTop: '1rem' }}>
-                    {error}
-                  </Alert>
-                )}
-
-                {response && (
-                  <Card style={{ marginTop: '1rem' }}>
-                    <CardTitle>Response</CardTitle>
-                    <CardBody>
-                      <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>
-                        {response}
-                      </pre>
-                    </CardBody>
-                  </Card>
-                )}
+                            {error && (
+                              <Alert variant="danger" title="Error" style={{ marginTop: '1rem' }}>
+                                {error}
+                              </Alert>
+                            )}
+                          </Form>
+                        </GridItem>
+                        
+                        <GridItem span={6}>
+                          <Title headingLevel="h3" size="lg" style={{ marginBottom: '1rem' }}>Response</Title>
+                          {response || isLoading ? (
+                            <Card style={{ height: 'calc(100vh - 400px)', minHeight: '400px' }}>
+                              <CardBody style={{ height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                                {isLoading && (
+                                  <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1rem' }}>
+                                    <Spinner size="sm" style={{ marginRight: '0.5rem' }} />
+                                    <span>Generating response...</span>
+                                  </div>
+                                )}
+                                <div style={{ 
+                                  flex: 1,
+                                  padding: '1rem',
+                                  backgroundColor: '#f5f5f5',
+                                  border: '1px solid #ddd',
+                                  borderRadius: '4px',
+                                  fontFamily: 'monospace',
+                                  whiteSpace: 'pre-wrap',
+                                  overflow: 'auto'
+                                }}>
+                                  {response || 'Waiting for response...'}
+                                </div>
+                              </CardBody>
+                            </Card>
+                          ) : (
+                            <Card style={{ height: 'calc(100vh - 400px)', minHeight: '400px' }}>
+                              <CardBody style={{ 
+                                height: '100%', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center',
+                                color: '#6a6e73'
+                              }}>
+                                <div style={{ textAlign: 'center' }}>
+                                  <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>💬</div>
+                                  <div>Response will appear here after generation</div>
+                                </div>
+                              </CardBody>
+                            </Card>
+                          )}
+                        </GridItem>
+                      </Grid>
+                    </div>
+                  </Tab>
+                  <Tab eventKey="backend-testing" title={<TabTitleText>Backend Testing</TabTitleText>}>
+                    <div style={{ padding: '1rem 0' }}>
+                      <BackendTesting project={project} onTestComplete={loadHistory} />
+                    </div>
+                  </Tab>
+                </Tabs>
               </CardBody>
             </Card>
           </div>

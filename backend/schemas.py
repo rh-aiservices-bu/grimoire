@@ -8,6 +8,7 @@ class ProjectCreate(BaseModel):
     llamastackUrl: str
     providerId: str
     gitRepoUrl: Optional[str] = None
+    testBackendUrl: Optional[str] = None
 
 class ProjectUpdate(BaseModel):
     name: Optional[str] = None
@@ -15,6 +16,7 @@ class ProjectUpdate(BaseModel):
     llamastackUrl: Optional[str] = None
     providerId: Optional[str] = None
     gitRepoUrl: Optional[str] = None
+    testBackendUrl: Optional[str] = None
 
 class ProjectResponse(BaseModel):
     id: int
@@ -23,6 +25,7 @@ class ProjectResponse(BaseModel):
     llamastack_url: str
     provider_id: str
     git_repo_url: Optional[str] = None
+    test_backend_url: Optional[str] = None
     created_at: datetime
     
     class Config:
@@ -49,9 +52,11 @@ class PromptHistoryResponse(BaseModel):
     top_p: Optional[float] = None
     top_k: Optional[int] = None
     response: Optional[str] = None
+    backend_response: Optional[str] = None
     rating: Optional[str] = None
     notes: Optional[str] = None
     is_prod: Optional[bool] = False
+    has_merged_pr: Optional[bool] = False
     created_at: datetime
     
     class Config:
@@ -134,3 +139,61 @@ class ProdPromptData(BaseModel):
     top_k: Optional[int] = None
     variables: Optional[Dict[str, str]] = None
     created_at: str
+
+class BackendTestRequest(BaseModel):
+    prompt: str
+    systemPrompt: Optional[str] = None
+    variables: Optional[Dict[str, str]] = None
+    temperature: Optional[float] = None
+    maxLen: Optional[int] = None
+    topP: Optional[float] = None
+    topK: Optional[int] = None
+
+class BackendTestHistoryResponse(BaseModel):
+    id: int
+    project_id: int
+    user_prompt: str
+    system_prompt: Optional[str] = None
+    variables: Optional[Dict[str, str]] = None
+    temperature: Optional[float] = None
+    max_len: Optional[int] = None
+    top_p: Optional[float] = None
+    top_k: Optional[int] = None
+    backend_response: Optional[str] = None
+    response_time_ms: Optional[int] = None
+    status_code: Optional[int] = None
+    error_message: Optional[str] = None
+    is_test: Optional[bool] = False
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+class BackendTestHistoryUpdate(BaseModel):
+    is_test: Optional[bool] = None
+
+class TestPromptData(BaseModel):
+    user_prompt: str
+    system_prompt: Optional[str] = None
+    temperature: Optional[float] = None
+    max_len: Optional[int] = None
+    top_p: Optional[float] = None
+    top_k: Optional[int] = None
+    variables: Optional[Dict[str, str]] = None
+    created_at: str
+
+class TestSettingsRequest(BaseModel):
+    systemPrompt: Optional[str] = None
+    variables: Optional[Dict[str, str]] = None
+    temperature: Optional[float] = 0.7
+    maxLen: Optional[int] = 1000
+    topP: Optional[float] = 0.9
+    topK: Optional[int] = 50
+
+class TestSettingsResponse(BaseModel):
+    systemPrompt: Optional[str] = None
+    variables: Optional[Dict[str, str]] = None
+    temperature: Optional[float] = 0.7
+    maxLen: Optional[int] = 1000
+    topP: Optional[float] = 0.9
+    topK: Optional[int] = 50
