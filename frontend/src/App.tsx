@@ -104,7 +104,14 @@ function AppContent() {
             <Page className="app-full-width">
               <PageSection>
                 <div className="pf-u-mb-lg">
-                  <Title headingLevel="h1" size="2xl">Prompt Experimentation Tool</Title>
+                  <div className="pf-u-display-flex pf-u-align-items-center pf-u-mb-sm">
+                    <img 
+                      src="/grimoire-logo.png" 
+                      alt="Grimoire Logo" 
+                      style={{ width: '48px', height: '48px', marginRight: '16px' }}
+                    />
+                    <Title headingLevel="h1" size="2xl">Grimoire - Prompt Experimentation Tool</Title>
+                  </div>
                   <p className="pf-u-color-200">
                     Experiment with prompts using different Llama Stack models and track your results.
                   </p>

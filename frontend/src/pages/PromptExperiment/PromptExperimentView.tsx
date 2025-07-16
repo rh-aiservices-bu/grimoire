@@ -310,7 +310,14 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
         backgroundColor: 'white',
         borderBottom: '1px solid #d2d2d2'
       }}>
-        <Title headingLevel="h1" size="2xl">{currentProject.name}</Title>
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '0.5rem' }}>
+          <img 
+            src="/grimoire-logo.png" 
+            alt="Grimoire Logo" 
+            style={{ width: '32px', height: '32px', marginRight: '12px' }}
+          />
+          <Title headingLevel="h1" size="2xl">{currentProject.name}</Title>
+        </div>
         <small>
           Model: {currentProject.provider_id} | URL: {currentProject.llamastack_url}
         </small>
