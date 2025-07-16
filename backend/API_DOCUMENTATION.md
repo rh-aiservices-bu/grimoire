@@ -178,6 +178,9 @@ curl http://localhost:3001/api/projects/1/test-settings
 - **POST** `/api/projects/{id}/history/{historyId}/tag-test` - Save test settings to git
 - **GET** `/api/projects/{id}/pending-prs` - Get pending pull requests with live status
 - **GET** `/api/projects/{id}/prod-history` - Get production history from git commits
+- **GET** `/api/projects/{id}/git-history` - Get unified git history
+- **POST** `/api/projects/{id}/sync-prs` - Sync PR statuses from git
+- **POST** `/api/projects/{id}/git/test-access` - Test git repository access
 - **Tag**: `Git`
 - **Use Case**: Git-based production deployment workflow
 - **Platform Support**: GitHub, GitLab, and Gitea fully supported
@@ -186,6 +189,8 @@ curl http://localhost:3001/api/projects/1/test-settings
 - **POST** `/api/projects/{id}/test-backend` - Test backend with streaming responses
 - **GET** `/api/projects/{id}/backend-history` - Get backend test history
 - **PUT** `/api/projects/{id}/backend-history/{historyId}` - Update backend test status
+- **POST** `/api/projects/{id}/backend-history/{historyId}/tag-prod` - Create production PR from backend test
+- **POST** `/api/projects/{id}/backend-history/{historyId}/tag-test` - Save test settings from backend test
 - **Tag**: `Backend Testing`
 - **Use Case**: Test prompts against configured backend URLs
 - **Features**: Streaming responses, performance metrics, template variables
@@ -382,6 +387,7 @@ if (projects.length > 0) {
 All endpoints return standard HTTP status codes:
 
 - **200** - Success
+- **201** - Created
 - **404** - Resource not found
 - **422** - Validation error
 - **500** - Internal server error
@@ -392,3 +398,29 @@ Error responses include descriptive messages:
   "detail": "Project not found"
 }
 ```
+
+## 📡 Streaming Responses
+
+Both `/generate` and `/test-backend` endpoints support Server-Sent Events (SSE) streaming:
+
+**Content-Type**: `text/event-stream`
+
+**Response Format**:
+```
+data: {"type": "token", "content": "Hello"}
+data: {"type": "token", "content": " world"}
+data: {"type": "done", "response_time": 1.23}
+```
+
+**Event Types**:
+- `token`: Partial response content
+- `done`: End of stream with performance metrics
+- `error`: Error occurred during streaming
+
+## 🔍 Debug Endpoints
+
+### Debug Information
+- **GET** `/api/debug/projects` - Debug endpoint for projects
+- **Tag**: `Debug`
+- **Use Case**: Troubleshooting and development
+- **Features**: Detailed project information with relationships

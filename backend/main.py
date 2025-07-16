@@ -194,75 +194,89 @@ async def get_prompt_history(project_id: int, db: Session = Depends(get_db)):
     result = []
     
     # Add current prod/test entries from git if project has git repo
+    # Rate limit git access to prevent excessive API calls during backend testing
     if project.git_repo_url:
         user = db.query(User).order_by(User.created_at.desc()).first()
         if user:
             try:
-                token = git_service.decrypt_token(user.git_access_token)
+                # Check if we've accessed git recently (within last 10 seconds)
+                last_history_entry = db.query(PromptHistory).filter(
+                    PromptHistory.project_id == project_id
+                ).order_by(PromptHistory.created_at.desc()).first()
                 
-                # Get current production prompt from git
-                try:
-                    current_prod = git_service.get_prod_prompt_from_git(
-                        user.git_platform,
-                        token,
-                        project.git_repo_url,
-                        project.name,
-                        project.provider_id
-                    )
-                    if current_prod:
-                        prod_entry = PromptHistoryResponse(
-                            id=-1,  # Special ID for current prod
-                            project_id=project_id,
-                            user_prompt=current_prod.user_prompt,
-                            system_prompt=current_prod.system_prompt,
-                            variables=current_prod.variables,
-                            temperature=current_prod.temperature,
-                            max_len=current_prod.max_len,
-                            top_p=current_prod.top_p,
-                            top_k=current_prod.top_k,
-                            response=None,
-                            backend_response=None,
-                            rating=None,
-                            notes="🚀 CURRENT PRODUCTION - Active in git repository",
-                            is_prod=True,
-                            has_merged_pr=False,
-                            created_at=datetime.now()
-                        )
-                        result.append(prod_entry)
-                except Exception as e:
-                    print(f"Failed to get current prod prompt: {e}")
+                recent_access = (
+                    last_history_entry is not None and
+                    (datetime.now() - last_history_entry.created_at).total_seconds() < 10
+                )
                 
-                # Get current test settings from git
-                try:
-                    current_test = git_service.get_test_settings_from_git(
-                        user.git_platform,
-                        token,
-                        project.git_repo_url,
-                        project.name,
-                        project.provider_id
-                    )
-                    if current_test:
-                        test_entry = PromptHistoryResponse(
-                            id=-2,  # Special ID for current test
-                            project_id=project_id,
-                            user_prompt=current_test.get('userPrompt', ''),
-                            system_prompt=current_test.get('systemPrompt', ''),
-                            variables=current_test.get('variables', {}),
-                            temperature=current_test.get('temperature', 0.7),
-                            max_len=current_test.get('maxLen', 1000),
-                            top_p=current_test.get('topP', 0.9),
-                            top_k=current_test.get('topK', 50),
-                            response=None,
-                            backend_response=None,
-                            rating=None,
-                            notes="🧪 CURRENT TEST - Active test configuration in git",
-                            is_prod=False,
-                            has_merged_pr=False,
-                            created_at=datetime.now()
+                if not recent_access:
+                    token = git_service.decrypt_token(user.git_access_token)
+                    
+                    # Get current production prompt from git
+                    try:
+                        current_prod = git_service.get_prod_prompt_from_git(
+                            user.git_platform,
+                            token,
+                            project.git_repo_url,
+                            project.name,
+                            project.provider_id
                         )
-                        result.append(test_entry)
-                except Exception as e:
-                    print(f"Failed to get current test settings: {e}")
+                        if current_prod:
+                            prod_entry = PromptHistoryResponse(
+                                id=-1,  # Special ID for current prod
+                                project_id=project_id,
+                                user_prompt=current_prod.user_prompt,
+                                system_prompt=current_prod.system_prompt,
+                                variables=current_prod.variables,
+                                temperature=current_prod.temperature,
+                                max_len=current_prod.max_len,
+                                top_p=current_prod.top_p,
+                                top_k=current_prod.top_k,
+                                response=None,
+                                backend_response=None,
+                                rating=None,
+                                notes="🚀 CURRENT PRODUCTION - Active in git repository",
+                                is_prod=True,
+                                has_merged_pr=False,
+                                created_at=datetime.now()
+                            )
+                            result.append(prod_entry)
+                    except Exception as e:
+                        print(f"Failed to get current prod prompt: {e}")
+                    
+                    # Get current test settings from git
+                    try:
+                        current_test = git_service.get_test_settings_from_git(
+                            user.git_platform,
+                            token,
+                            project.git_repo_url,
+                            project.name,
+                            project.provider_id
+                        )
+                        if current_test:
+                            test_entry = PromptHistoryResponse(
+                                id=-2,  # Special ID for current test
+                                project_id=project_id,
+                                user_prompt=current_test.get('userPrompt', ''),
+                                system_prompt=current_test.get('systemPrompt', ''),
+                                variables=current_test.get('variables', {}),
+                                temperature=current_test.get('temperature', 0.7),
+                                max_len=current_test.get('maxLen', 1000),
+                                top_p=current_test.get('topP', 0.9),
+                                top_k=current_test.get('topK', 50),
+                                response=None,
+                                backend_response=None,
+                                rating=None,
+                                notes="🧪 CURRENT TEST - Active test configuration in git",
+                                is_prod=False,
+                                has_merged_pr=False,
+                                created_at=datetime.now()
+                            )
+                            result.append(test_entry)
+                    except Exception as e:
+                        print(f"Failed to get current test settings: {e}")
+                else:
+                    print(f"⏰ Skipping git access for project {project_id} (accessed recently)")
                     
             except Exception as e:
                 print(f"Failed to decrypt token or access git: {e}")
@@ -1757,8 +1771,21 @@ async def get_prod_history_from_git(project_id: int, db: Session = Depends(get_d
             # Return empty history with a message that auth is needed
             return []
         
-        # First, sync any new commits
-        await sync_git_commits_for_project(project_id, db, user)
+        # First, sync any new commits (with rate limiting to prevent excessive syncing)
+        # Check if we've synced recently (within last 30 seconds)
+        last_commit = db.query(GitCommitCache).filter(
+            GitCommitCache.project_id == project_id
+        ).order_by(GitCommitCache.created_at.desc()).first()
+        
+        should_sync = (
+            last_commit is None or 
+            (datetime.now() - last_commit.created_at).total_seconds() > 30
+        )
+        
+        if should_sync:
+            await sync_git_commits_for_project(project_id, db, user)
+        else:
+            print(f"⏰ Skipping git sync for project {project_id} (synced recently)")
         
         # Then, get cached commits from database (much faster!)
         cached_commits = db.query(GitCommitCache).filter(

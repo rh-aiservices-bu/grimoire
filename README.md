@@ -159,45 +159,30 @@ Update `helm/values.yaml` to customize:
 
 ## API Endpoints
 
-### Projects
-- `GET /api/projects` - List all projects
-- `POST /api/projects` - Create a new project
-- `GET /api/projects/:id` - Get a specific project
-- `PUT /api/projects/:id` - Update a project
-- `DELETE /api/projects/:id` - Delete a project
+### Core API
+- **Projects**: Full CRUD operations for project management
+- **History**: Prompt history tracking with ratings and notes
+- **Generation**: Streaming response generation using Llama Stack
+- **Backend Testing**: Test prompts against external backends with metrics
 
-### Prompt History
-- `GET /api/projects/:id/history` - Get prompt history for a project
-- `POST /api/projects/:id/history` - Save prompt history entry
-- `PUT /api/projects/:id/history/:historyId` - Update history (rating, notes, production status)
-
-### Generation
-- `POST /api/projects/:id/generate` - Generate response using Llama Stack (streaming)
-
-### Backend Testing
-- `POST /api/projects/:id/test-backend` - Test backend with streaming responses
-- `GET /api/projects/:id/backend-history` - Get backend test history
-- `PUT /api/projects/:id/backend-history/:historyId` - Update backend test status
-
-### External API
-- `GET /api/projects-models` - List all projects and models for integration
-- `GET /prompt/{project_name}/{provider_id}` - Get latest prompt configuration
-- `GET /prompt/{project_name}/{provider_id}/prod` - Get production prompt configuration (from git when available)
+### External Integration API
+- **GET** `/api/projects-models` - List all projects and models for integration
+- **GET** `/prompt/{project_name}/{provider_id}` - Get latest prompt configuration
+- **GET** `/prompt/{project_name}/{provider_id}/prod` - Get production prompt configuration (from git when available)
 
 ### Git Integration
-- `POST /api/git/auth` - Authenticate with git platform (GitHub/GitLab/Gitea)
-- `GET /api/git/user` - Get current authenticated git user
-- `GET /api/git/auth-status` - Check authentication status
-- `POST /api/git/sync-all` - Sync all git projects
-- `POST /api/projects/{id}/history/{historyId}/tag-prod` - Create production PR
-- `POST /api/projects/{id}/history/{historyId}/tag-test` - Save test settings to git
-- `GET /api/projects/{id}/pending-prs` - Get pending pull requests
-- `GET /api/projects/{id}/prod-history` - Get production history from git
-- `POST /api/projects/{id}/sync-prs` - Sync PR statuses from git
+- **Authentication**: Support for GitHub, GitLab, and Gitea platforms
+- **Production Workflow**: Create Pull Requests for production deployments
+- **History Sync**: Real-time synchronization with git repositories
+- **Settings Management**: Version-controlled test configurations
 
-### Settings Management
-- `GET /api/projects/{id}/test-settings` - Get test settings from git
-- `POST /api/projects/{id}/test-settings` - Save test settings to git
+### Advanced Features
+- **Streaming Responses**: Server-Sent Events for real-time output
+- **Template Variables**: Dynamic prompt templates with `{{variable_name}}` syntax
+- **Performance Metrics**: Response time and HTTP status tracking
+- **Debug Endpoints**: Troubleshooting and development tools
+
+For detailed API documentation with examples, see [backend/API_DOCUMENTATION.md](backend/API_DOCUMENTATION.md).
 
 ### Production Features
 - **Git-based Production Workflow**: Create Pull Requests for production deployments

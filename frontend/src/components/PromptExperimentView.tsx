@@ -715,7 +715,7 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
                   </Tab>
                   <Tab eventKey="backend-testing" title={<TabTitleText>Backend Testing</TabTitleText>}>
                     <div style={{ padding: '1rem 0' }}>
-                      <BackendTesting project={project} onTestComplete={loadHistory} />
+                      <BackendTesting project={project} />
                     </div>
                   </Tab>
                 </Tabs>

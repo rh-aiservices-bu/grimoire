@@ -29,10 +29,9 @@ import { GitAuthModal } from './GitAuthModal';
 
 interface BackendTestingProps {
   project: Project;
-  onTestComplete?: () => void;
 }
 
-export const BackendTesting: React.FC<BackendTestingProps> = ({ project, onTestComplete }) => {
+export const BackendTesting: React.FC<BackendTestingProps> = ({ project }) => {
   // Tab state
   const [activeTab, setActiveTab] = useState('chat');
   
@@ -154,11 +153,9 @@ export const BackendTesting: React.FC<BackendTestingProps> = ({ project, onTestC
         },
         () => {
           setIsLoading(false);
-          setSuccess('Backend test completed successfully! Response saved to history.');
-          // Notify parent component to refresh history
-          if (onTestComplete) {
-            onTestComplete();
-          }
+          setSuccess('Backend test completed successfully! Response saved to backend test history.');
+          // Note: We don't call onTestComplete here to avoid creating Development/Git History cards
+          // Backend tests are saved to a separate BackendTestHistory table
         }
       );
     } catch (err) {

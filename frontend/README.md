@@ -1,69 +1,168 @@
-# React + TypeScript + Vite
+# Prompt Experimentation Tool - Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A React-based frontend application built with TypeScript, Vite, and PatternFly for experimenting with prompts using Llama Stack models.
 
-Currently, two official plugins are available:
+## Technology Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Framework**: React 18 + TypeScript
+- **Build Tool**: Vite
+- **UI Library**: PatternFly (React)
+- **Styling**: CSS Modules
+- **State Management**: React Hooks
+- **API Client**: Fetch API with streaming support
+- **Development**: Hot Module Replacement (HMR) with Fast Refresh
 
-## Expanding the ESLint configuration
+## Features
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### Core Functionality
+- **Project Management**: Create, edit, and delete projects with Llama Stack configurations
+- **Prompt Experimentation**: Interactive prompt editor with template variables
+- **Backend Testing**: Test prompts against configured backend URLs with streaming responses
+- **History Tracking**: View and manage prompt/response history with ratings and notes
+- **Git Integration**: Connect to GitHub/GitLab/Gitea for production workflow
 
-```js
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### UI Components
+- **ProjectList**: Main project dashboard with search and filtering
+- **ProjectModal**: Create new projects with validation
+- **ProjectEditModal**: Edit existing project configurations
+- **PromptExperimentView**: Main prompt experimentation interface
+- **BackendTesting**: Dedicated backend testing interface
+- **HistoryLog**: View and manage prompt history
+- **GitAuthModal**: Git platform authentication
+- **NotesModal**: Add detailed notes to prompts
+- **ApiDocumentationModal**: Interactive API documentation
 
-      // Remove tseslint.configs.recommended and replace with this
-      ...tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      ...tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      ...tseslint.configs.stylisticTypeChecked,
+### Advanced Features
+- **Streaming Responses**: Real-time display of model outputs
+- **Template Variables**: Dynamic prompt templates using `{{variable_name}}` syntax
+- **Production Workflow**: Create Pull Requests for production deployments
+- **Dual History Views**: Switch between experimental and production history
+- **Real-time Sync**: Auto-refresh production data from git repositories
+- **Performance Metrics**: Response time and HTTP status tracking
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Development Setup
+
+### Prerequisites
+- Node.js 18+
+- npm or yarn
+
+### Installation
+```bash
+cd frontend
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### Development Server
+```bash
+npm run dev
 ```
+Access the application at http://localhost:5173
+
+### Build for Production
+```bash
+npm run build
+```
+
+### Preview Production Build
+```bash
+npm run preview
+```
+
+## Project Structure
+
+```
+frontend/
+├── src/
+│   ├── components/          # React components
+│   │   ├── ApiDocumentationModal.tsx
+│   │   ├── BackendTesting.tsx
+│   │   ├── DeleteProjectModal.tsx
+│   │   ├── GitAuthModal.tsx
+│   │   ├── HistoryLog.tsx
+│   │   ├── NotesModal.tsx
+│   │   ├── ProdConfirmationModal.tsx
+│   │   ├── ProjectEditModal.tsx
+│   │   ├── ProjectList.tsx
+│   │   ├── ProjectModal.tsx
+│   │   └── PromptExperimentView.tsx
+│   ├── types.ts            # TypeScript type definitions
+│   ├── api.ts              # API client with streaming support
+│   ├── App.tsx             # Main application component
+│   ├── App.css             # Global styles
+│   ├── index.css           # Base styles
+│   └── main.tsx            # Application entry point
+├── public/                 # Static assets
+├── package.json           # Dependencies and scripts
+├── tsconfig.json          # TypeScript configuration
+├── vite.config.ts         # Vite configuration
+├── eslint.config.js       # ESLint configuration
+└── nginx.conf             # Nginx configuration for production
+```
+
+## Configuration
+
+### Environment Variables
+Create a `.env` file in the frontend directory:
+```env
+VITE_API_URL=http://localhost:3001
+```
+
+### TypeScript Configuration
+The project uses strict TypeScript settings with path mapping and modern ES features.
+
+### ESLint Configuration
+Includes React-specific rules and TypeScript type checking for production-ready code quality.
+
+## API Integration
+
+The frontend communicates with the backend through:
+- **REST API**: Standard CRUD operations
+- **Server-Sent Events**: Real-time streaming for generation and testing
+- **WebSocket-like**: Long-lived connections for git synchronization
+
+## Container Support
+
+### Development
+```bash
+docker build -t prompt-tool-frontend:dev -f Containerfile .
+docker run -p 3000:3000 prompt-tool-frontend:dev
+```
+
+### Production
+The frontend is served by Nginx with optimized static asset delivery and API proxying.
+
+## Performance Optimizations
+
+- **Code Splitting**: Lazy loading of components
+- **Asset Optimization**: Vite's built-in asset optimization
+- **Streaming Support**: Efficient real-time data handling
+- **Caching**: Smart API response caching
+- **Bundle Size**: Optimized PatternFly imports
+
+## Contributing
+
+1. Follow the existing code style and patterns
+2. Use TypeScript for type safety
+3. Test components thoroughly
+4. Ensure responsive design compatibility
+5. Add proper error handling
+
+## Browser Support
+
+- Chrome 88+
+- Firefox 85+
+- Safari 14+
+- Edge 88+
+
+## Troubleshooting
+
+### Common Issues
+- **API Connection**: Ensure backend is running on port 3001
+- **CORS Issues**: Check proxy configuration in vite.config.ts
+- **Build Failures**: Clear node_modules and reinstall dependencies
+- **TypeScript Errors**: Run `npm run type-check` for detailed error information
+
+### Performance Issues
+- Check network tab for slow API calls
+- Monitor memory usage with React DevTools
+- Verify streaming connections are properly closed
