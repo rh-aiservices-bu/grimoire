@@ -41,6 +41,8 @@ export interface BackendTestHistory {
   response_time_ms?: number;
   status_code?: number;
   error_message?: string;
+  rating?: string;
+  notes?: string;
   is_test?: boolean;
   created_at: string;
 }

@@ -191,12 +191,88 @@ async def get_prompt_history(project_id: int, db: Session = Depends(get_db)):
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
+    result = []
+    
+    # Add current prod/test entries from git if project has git repo
+    if project.git_repo_url:
+        user = db.query(User).order_by(User.created_at.desc()).first()
+        if user:
+            try:
+                token = git_service.decrypt_token(user.git_access_token)
+                
+                # Get current production prompt from git
+                try:
+                    current_prod = git_service.get_prod_prompt_from_git(
+                        user.git_platform,
+                        token,
+                        project.git_repo_url,
+                        project.name,
+                        project.provider_id
+                    )
+                    if current_prod:
+                        prod_entry = PromptHistoryResponse(
+                            id=-1,  # Special ID for current prod
+                            project_id=project_id,
+                            user_prompt=current_prod.user_prompt,
+                            system_prompt=current_prod.system_prompt,
+                            variables=current_prod.variables,
+                            temperature=current_prod.temperature,
+                            max_len=current_prod.max_len,
+                            top_p=current_prod.top_p,
+                            top_k=current_prod.top_k,
+                            response=None,
+                            backend_response=None,
+                            rating=None,
+                            notes="🚀 CURRENT PRODUCTION - Active in git repository",
+                            is_prod=True,
+                            has_merged_pr=False,
+                            created_at=datetime.now()
+                        )
+                        result.append(prod_entry)
+                except Exception as e:
+                    print(f"Failed to get current prod prompt: {e}")
+                
+                # Get current test settings from git
+                try:
+                    current_test = git_service.get_test_settings_from_git(
+                        user.git_platform,
+                        token,
+                        project.git_repo_url,
+                        project.name,
+                        project.provider_id
+                    )
+                    if current_test:
+                        test_entry = PromptHistoryResponse(
+                            id=-2,  # Special ID for current test
+                            project_id=project_id,
+                            user_prompt=current_test.get('userPrompt', ''),
+                            system_prompt=current_test.get('systemPrompt', ''),
+                            variables=current_test.get('variables', {}),
+                            temperature=current_test.get('temperature', 0.7),
+                            max_len=current_test.get('maxLen', 1000),
+                            top_p=current_test.get('topP', 0.9),
+                            top_k=current_test.get('topK', 50),
+                            response=None,
+                            backend_response=None,
+                            rating=None,
+                            notes="🧪 CURRENT TEST - Active test configuration in git",
+                            is_prod=False,
+                            has_merged_pr=False,
+                            created_at=datetime.now()
+                        )
+                        result.append(test_entry)
+                except Exception as e:
+                    print(f"Failed to get current test settings: {e}")
+                    
+            except Exception as e:
+                print(f"Failed to decrypt token or access git: {e}")
+    
+    # Get regular history from database
     history = db.query(PromptHistory).filter(
         PromptHistory.project_id == project_id
     ).order_by(PromptHistory.is_prod.desc(), PromptHistory.created_at.desc()).all()
     
     # Parse variables JSON and check for merged PRs
-    result = []
     for item in history:
         if item.variables:
             try:
@@ -368,6 +444,12 @@ async def update_backend_test_history(
                 PromptHistory.project_id == project_id
             ).update({"is_prod": False})
         history_item.is_test = request.is_test
+    
+    if request.rating is not None:
+        history_item.rating = request.rating
+    
+    if request.notes is not None:
+        history_item.notes = request.notes
     
     db.commit()
     db.refresh(history_item)
@@ -1079,7 +1161,11 @@ async def tag_prompt_as_prod(
         )
         
         # Create PR
-        token = git_service.decrypt_token(user.git_access_token)
+        try:
+            token = git_service.decrypt_token(user.git_access_token)
+        except Exception as decrypt_error:
+            print(f"❌ Failed to decrypt git token: {decrypt_error}")
+            raise HTTPException(status_code=401, detail="Git authentication expired or invalid. Please re-authenticate with git.")
         pr_result = git_service.create_prompt_pr(
             user.git_platform,
             token,
@@ -1129,14 +1215,23 @@ async def tag_backend_test_as_test(
     # Get project and history
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
+        print(f"❌ Project {project_id} not found")
         raise HTTPException(status_code=404, detail="Project not found")
+    
+    print(f"✅ Found project: {project.name}")
     
     history_item = db.query(BackendTestHistory).filter(
         BackendTestHistory.id == history_id,
         BackendTestHistory.project_id == project_id
     ).first()
     if not history_item:
+        print(f"❌ Backend test history item {history_id} not found for project {project_id}")
+        # Let's check what backend test items exist
+        all_items = db.query(BackendTestHistory).filter(BackendTestHistory.project_id == project_id).all()
+        print(f"Available backend test items for project {project_id}: {[item.id for item in all_items]}")
         raise HTTPException(status_code=404, detail="Backend test history item not found")
+    
+    print(f"✅ Found backend test history item: {history_item.id}")
     
     # Check if project has git repo
     if not project.git_repo_url:
@@ -1168,7 +1263,11 @@ async def tag_backend_test_as_test(
         )
         
         # Create test settings file in git (similar to Save Settings functionality)
-        token = git_service.decrypt_token(user.git_access_token)
+        try:
+            token = git_service.decrypt_token(user.git_access_token)
+        except Exception as decrypt_error:
+            print(f"❌ Failed to decrypt git token: {decrypt_error}")
+            raise HTTPException(status_code=401, detail="Git authentication expired or invalid. Please re-authenticate with git.")
         
         # Convert test data to settings format
         settings_data = {
@@ -1179,7 +1278,7 @@ async def tag_backend_test_as_test(
             "maxLen": test_data.max_len,
             "topP": test_data.top_p,
             "topK": test_data.top_k,
-            "created_at": test_data.created_at.isoformat()
+            "created_at": test_data.created_at  # Already a string from isoformat()
         }
         
         # Save test settings to git
@@ -1223,6 +1322,94 @@ async def tag_backend_test_as_test(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to save test settings: {error_msg}")
+
+@app.post("/api/projects/{project_id}/backend-history/{history_id}/tag-prod", tags=["Git"])
+async def tag_backend_test_as_prod(
+    project_id: int,
+    history_id: int,
+    db: Session = Depends(get_db)
+):
+    """Tag a backend test as production - creates PR for production deployment"""
+    print(f"🔍 tag_backend_test_as_prod called with project_id={project_id}, history_id={history_id}")
+    
+    # Get project and history
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        print(f"❌ Project {project_id} not found")
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    print(f"✅ Found project: {project.name}")
+    
+    history_item = db.query(BackendTestHistory).filter(
+        BackendTestHistory.id == history_id,
+        BackendTestHistory.project_id == project_id
+    ).first()
+    if not history_item:
+        print(f"❌ Backend test history item {history_id} not found for project {project_id}")
+        raise HTTPException(status_code=404, detail="Backend test history item not found")
+    
+    print(f"✅ Found backend test history item: {history_item.id}")
+    
+    # Check if project has git repo
+    if not project.git_repo_url:
+        raise HTTPException(status_code=400, detail="Project has no git repository configured")
+    
+    # Get current user (most recently authenticated)
+    user = db.query(User).order_by(User.created_at.desc()).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="No authenticated git user found")
+    
+    try:
+        # Prepare prompt data for production
+        variables = None
+        if history_item.variables:
+            try:
+                variables = json.loads(history_item.variables)
+            except:
+                variables = None
+        
+        prod_data = ProdPromptData(
+            user_prompt=history_item.user_prompt,
+            system_prompt=history_item.system_prompt,
+            temperature=history_item.temperature,
+            max_len=history_item.max_len,
+            top_p=history_item.top_p,
+            top_k=history_item.top_k,
+            variables=variables,
+            created_at=history_item.created_at.isoformat()
+        )
+        
+        # Create PR
+        try:
+            token = git_service.decrypt_token(user.git_access_token)
+        except Exception as decrypt_error:
+            print(f"❌ Failed to decrypt git token: {decrypt_error}")
+            raise HTTPException(status_code=401, detail="Git authentication expired or invalid. Please re-authenticate with git.")
+        
+        pr_result = git_service.create_prompt_pr(
+            user.git_platform,
+            token,
+            project.git_repo_url,
+            project.name,
+            project.provider_id,
+            prod_data
+        )
+        
+        if not pr_result:
+            raise HTTPException(status_code=500, detail="Failed to create production PR")
+        
+        return {
+            "message": "Production PR created successfully",
+            "pr_url": pr_result.get('pr_url'),
+            "pr_number": pr_result.get('pr_number')
+        }
+        
+    except Exception as e:
+        error_msg = str(e)
+        print(f"❌ tag_backend_test_as_prod error: {error_msg}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to create production PR: {error_msg}")
 
 @app.post("/api/projects/{project_id}/history/{history_id}/tag-test", tags=["Git"])
 async def tag_prompt_as_test(
@@ -1291,7 +1478,11 @@ async def tag_prompt_as_test(
         print(f"🔍 tag_prompt_as_test: settings_data={settings_data}")
         
         # Save test settings to git
-        token = git_service.decrypt_token(user.git_access_token)
+        try:
+            token = git_service.decrypt_token(user.git_access_token)
+        except Exception as decrypt_error:
+            print(f"❌ Failed to decrypt git token: {decrypt_error}")
+            raise HTTPException(status_code=401, detail="Git authentication expired or invalid. Please re-authenticate with git.")
         result = git_service.save_test_settings_to_git(
             user.git_platform,
             token,
@@ -1622,6 +1813,57 @@ async def get_prod_history_from_git(project_id: int, db: Session = Depends(get_d
             
     except Exception as e:
         print(f"Failed to get prod history from git: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
+# Git History endpoint
+@app.get("/api/projects/{project_id}/git-history", tags=["Git"])
+async def get_git_history(project_id: int, db: Session = Depends(get_db)):
+    """Get unified git history for both prod and test files"""
+    print(f"📋 GET /api/projects/{project_id}/git-history called")
+    
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    print(f"📋 Project found: {project.name}, git_repo: {project.git_repo_url}")
+    
+    if not project.git_repo_url:
+        print(f"📋 No git repo configured, returning empty history")
+        return []  # No git repo, return empty history
+    
+    user = db.query(User).order_by(User.created_at.desc()).first()
+    if not user:
+        print(f"📋 No authenticated user found, returning empty history")
+        return []  # No authenticated user, return empty history
+    
+    print(f"📋 User found: {user.git_username}@{user.git_platform}")
+    
+    try:
+        # Test if the user's token can be decrypted
+        try:
+            token = git_service.decrypt_token(user.git_access_token)
+        except Exception as decrypt_error:
+            print(f"❌ Token decryption failed: {decrypt_error}")
+            print(f"❌ User needs to re-authenticate with git")
+            return []
+        
+        # Get unified git history
+        git_history = git_service.get_unified_git_history(
+            user.git_platform,
+            token,
+            project.git_repo_url,
+            project.name,
+            project.provider_id,
+            limit=30
+        )
+        
+        print(f"Retrieved {len(git_history)} git commits for project {project_id}")
+        return git_history
+            
+    except Exception as e:
+        print(f"Failed to get git history: {e}")
         import traceback
         traceback.print_exc()
         return []

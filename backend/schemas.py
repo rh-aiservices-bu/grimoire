@@ -163,6 +163,8 @@ class BackendTestHistoryResponse(BaseModel):
     response_time_ms: Optional[int] = None
     status_code: Optional[int] = None
     error_message: Optional[str] = None
+    rating: Optional[str] = None
+    notes: Optional[str] = None
     is_test: Optional[bool] = False
     created_at: datetime
     
@@ -171,6 +173,8 @@ class BackendTestHistoryResponse(BaseModel):
 
 class BackendTestHistoryUpdate(BaseModel):
     is_test: Optional[bool] = None
+    rating: Optional[str] = None
+    notes: Optional[str] = None
 
 class TestPromptData(BaseModel):
     user_prompt: str

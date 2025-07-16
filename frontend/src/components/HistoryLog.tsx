@@ -41,8 +41,8 @@ interface HistoryLogProps {
     actionLinks?: Array<{ text: string; url: string }>;
     actionButton?: { text: string; onClick: () => void };
   }) => void;
-  viewMode?: 'development' | 'prod';
-  onViewModeChange?: (mode: 'development' | 'prod') => void;
+  viewMode?: 'development' | 'git';
+  onViewModeChange?: (mode: 'development' | 'git') => void;
 }
 
 export const HistoryLog: React.FC<HistoryLogProps> = ({ 
@@ -65,10 +65,10 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [testItem, setTestItem] = useState<BackendTestHistory | null>(null);
   // Use external view mode if provided, otherwise internal state
-  const [internalViewMode, setInternalViewMode] = useState<'development' | 'prod'>('development');
+  const [internalViewMode, setInternalViewMode] = useState<'development' | 'git'>('development');
   const viewMode = externalViewMode ?? internalViewMode;
   const setViewMode = externalOnViewModeChange ?? setInternalViewMode;
-  const [prodHistory, setProdHistory] = useState<PromptHistory[]>([]);
+  const [gitHistory, setGitHistory] = useState<any[]>([]);
   const [backendHistory, setBackendHistory] = useState<BackendTestHistory[]>([]);
   const [pendingPRs, setPendingPRs] = useState<PendingPR[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -76,8 +76,8 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({
   const [isCreatingPR, setIsCreatingPR] = useState(false);
   const refreshIntervalRef = useRef<number | null>(null);
   
-  // Cache for production history and pending PRs
-  const prodHistoryCache = useRef<Map<number, { data: PromptHistory[]; timestamp: number }>>(new Map());
+  // Cache for git history and pending PRs
+  const gitHistoryCache = useRef<Map<number, { data: any[]; timestamp: number }>>(new Map());
   const pendingPRsCache = useRef<Map<number, { data: PendingPR[]; timestamp: number }>>(new Map());
   const CACHE_DURATION = 60000; // 60 seconds cache (backend is now smarter with incremental sync)
   const MAX_CACHE_SIZE = 10; // Limit cache to prevent memory growth
@@ -117,18 +117,27 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({
     return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
   };
 
-  const handleRating = async (item: PromptHistory, rating: 'thumbs_up' | 'thumbs_down') => {
+  const handleRating = async (item: PromptHistory | BackendTestHistory, rating: 'thumbs_up' | 'thumbs_down') => {
     try {
       const newRating = item.rating === rating ? undefined : rating; // Toggle if same rating
-      await api.updatePromptHistory(item.project_id, item.id, { rating: newRating });
+      
+      // Check if this is a backend test item
+      const isBackendTestItem = 'response_time_ms' in item;
+      
+      if (isBackendTestItem) {
+        await api.updateBackendTestHistory(item.project_id, item.id, { rating: newRating });
+      } else {
+        await api.updatePromptHistory(item.project_id, item.id, { rating: newRating });
+      }
+      
       onHistoryUpdate();
     } catch (error) {
       console.error('Failed to update rating:', error);
     }
   };
 
-  const handleNotesClick = (item: PromptHistory) => {
-    setNotesItem(item);
+  const handleNotesClick = (item: PromptHistory | BackendTestHistory) => {
+    setNotesItem(item as any); // Cast to work with existing modal
     setIsNotesModalOpen(true);
   };
 
@@ -136,7 +145,15 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({
     if (!notesItem) return;
     
     try {
-      await api.updatePromptHistory(notesItem.project_id, notesItem.id, { notes });
+      // Check if this is a backend test item
+      const isBackendTestItem = 'response_time_ms' in notesItem;
+      
+      if (isBackendTestItem) {
+        await api.updateBackendTestHistory(notesItem.project_id, notesItem.id, { notes });
+      } else {
+        await api.updatePromptHistory(notesItem.project_id, notesItem.id, { notes });
+      }
+      
       onHistoryUpdate();
     } catch (error) {
       console.error('Failed to save notes:', error);
@@ -156,6 +173,18 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({
   const handleTestClick = (item: BackendTestHistory) => {
     setTestItem(item);
     setIsTestModalOpen(true);
+  };
+
+  const handlePromptTestClick = (item: PromptHistory) => {
+    // For prompt items, use the same logic as handleProdClick but only for test actions
+    setProdItem(item);
+    setIsProdModalOpen(true);
+  };
+
+  const handleBackendProdClick = (item: BackendTestHistory) => {
+    // For backend test items, use the same logic as handleProdClick but with backend test data
+    setProdItem(item as any); // Cast to work with existing modal
+    setIsProdModalOpen(true);
   };
 
   const handleTestConfirm = async () => {
@@ -188,12 +217,28 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({
           }
         } catch (gitError: any) {
           console.error('Failed to save test settings to git:', gitError);
-          if (onNotification) {
-            onNotification({
-              title: 'Git Save Failed',
-              variant: 'danger',
-              message: `Failed to save test settings to git: ${gitError.message || 'Unknown error'}`
-            });
+          
+          // Check if it's an authentication error
+          if (gitError.response?.status === 401) {
+            if (onNotification) {
+              onNotification({
+                title: 'Git Authentication Required',
+                variant: 'warning',
+                message: 'Your git authentication has expired. Please re-authenticate to save test settings.'
+              });
+            }
+            // Trigger git authentication dialog
+            if (onGitAuth) {
+              onGitAuth();
+            }
+          } else {
+            if (onNotification) {
+              onNotification({
+                title: 'Git Save Failed',
+                variant: 'danger',
+                message: `Failed to save test settings to git: ${gitError.message || 'Unknown error'}`
+              });
+            }
           }
           return;
         }
@@ -232,27 +277,13 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({
         }
         
         try {
-          // Determine if this is a test or production action
-          const isTestAction = !prodItem.is_prod; // If not already marked as test, this is a test action
+          // Determine if this is a backend test item or prompt item
+          const isBackendTestItem = 'response_time_ms' in prodItem;
           
-          if (isTestAction) {
-            // Test action - save test settings to git
-            const result = await api.tagPromptAsTest(projectId, prodItem.id);
-            console.log('Test settings saved to git:', result);
-            
-            // Show success notification with commit info
-            if (onNotification) {
-              onNotification({
-                title: 'Test Settings Saved to Git',
-                variant: 'success',
-                message: `Test settings have been saved to git repository. ${result.commit_sha ? 'Commit: ' + result.commit_sha.substring(0, 7) : ''}`,
-                actionLinks: result.commit_url ? [{ text: 'View Commit', url: result.commit_url }] : []
-              });
-            }
-          } else {
-            // Production action - create PR
-            const result = await api.tagPromptAsProd(projectId, prodItem.id);
-            console.log('PR created:', result);
+          if (isBackendTestItem) {
+            // Backend test item - create PR for production
+            const result = await api.tagBackendTestAsProd(projectId, prodItem.id);
+            console.log('Backend test PR created:', result);
             
             // Show success notification with link to PR
             if (onNotification) {
@@ -263,8 +294,70 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({
                 actionLinks: [{ text: `View PR #${result.pr_number}`, url: result.pr_url }]
               });
             }
+          } else {
+            // Prompt item - determine if this is a test or production action
+            const isTestAction = !prodItem.is_prod; // If not already marked as test, this is a test action
+            
+            if (isTestAction) {
+              // Test action - save test settings to git
+              const result = await api.tagPromptAsTest(projectId, prodItem.id);
+              console.log('Test settings saved to git:', result);
+              
+              // Show success notification with commit info
+              if (onNotification) {
+                onNotification({
+                  title: 'Test Settings Saved to Git',
+                  variant: 'success',
+                  message: `Test settings have been saved to git repository. ${result.commit_sha ? 'Commit: ' + result.commit_sha.substring(0, 7) : ''}`,
+                  actionLinks: result.commit_url ? [{ text: 'View Commit', url: result.commit_url }] : []
+                });
+              }
+            } else {
+              // Production action - create PR
+              const result = await api.tagPromptAsProd(projectId, prodItem.id);
+              console.log('PR created:', result);
+              
+              // Show success notification with link to PR
+              if (onNotification) {
+                onNotification({
+                  title: 'Pull Request Created Successfully',
+                  variant: 'success',
+                  message: `PR #${result.pr_number} has been created. Click the link below to review and merge it.`,
+                  actionLinks: [{ text: `View PR #${result.pr_number}`, url: result.pr_url }]
+                });
+              }
+            }
           }
+          
+          // Invalidate cache and refresh test history (moved inside try block)
+          console.log('Test settings saved - invalidating cache and refreshing data');
+          gitHistoryCache.current.delete(projectId);
+          pendingPRsCache.current.delete(projectId);
+          
+          // Always refresh main history to show updated test status
+          onHistoryUpdate();
+          
+          if (viewMode === 'git') {
+            await Promise.all([loadPendingPRs(true), loadGitHistory(false, true)]);
+          }
+          
         } catch (error: any) {
+          // Handle authentication errors
+          if (error.response?.status === 401) {
+            if (onNotification) {
+              onNotification({
+                title: 'Git Authentication Required',
+                variant: 'warning',
+                message: 'Your git authentication has expired. Please re-authenticate to save test settings or create PRs.'
+              });
+            }
+            // Trigger git authentication dialog
+            if (onGitAuth) {
+              onGitAuth();
+            }
+            return; // Don't fall through to generic error handling
+          }
+          
           // Handle platform-specific errors
           if (error.response?.status === 501) {
             if (onNotification) {
@@ -289,19 +382,34 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({
             return; // Don't fall through to generic error handling
           }
           
+          // Handle specific API errors with better messages
+          if (error.response?.status === 400) {
+            if (onNotification) {
+              onNotification({
+                title: 'Git Operation Failed',
+                variant: 'danger',
+                message: error.response.data.detail || 'Failed to save test settings or create production PR.',
+              });
+            }
+            return;
+          }
+          
+          if (error.response?.status === 401 || error.response?.status === 403) {
+            if (onNotification) {
+              onNotification({
+                title: 'Authentication Error',
+                variant: 'danger',
+                message: 'Invalid git credentials or insufficient repository permissions.',
+                actionButton: onGitAuth ? { 
+                  text: 'Re-authenticate with Git', 
+                  onClick: onGitAuth 
+                } : undefined
+              });
+            }
+            return;
+          }
+          
           throw error; // Re-throw for generic error handling
-        }
-        
-        // Invalidate cache and refresh test history
-        console.log('Test settings saved - invalidating cache and refreshing data');
-        prodHistoryCache.current.delete(projectId);
-        pendingPRsCache.current.delete(projectId);
-        
-        // Always refresh main history to show updated test status
-        onHistoryUpdate();
-        
-        if (viewMode === 'prod') {
-          await Promise.all([loadPendingPRs(true), loadProdHistory(false, true)]);
         }
       } else {
         // Original behavior for projects without git repo
@@ -327,15 +435,15 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({
     }
   };
 
-  const loadProdHistory = async (isManualRefresh = false, forceRefresh = false) => {
+  const loadGitHistory = async (isManualRefresh = false, forceRefresh = false) => {
     if (!hasGitRepo) return;
     
     // Check cache first (unless manual refresh or force refresh)
     if (!isManualRefresh && !forceRefresh) {
-      const cached = prodHistoryCache.current.get(projectId);
+      const cached = gitHistoryCache.current.get(projectId);
       if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-        console.log(`Using cached prod history for project ${projectId}`);
-        setProdHistory(cached.data);
+        console.log(`Using cached git history for project ${projectId}`);
+        setGitHistory(cached.data);
         return;
       }
     }
@@ -347,21 +455,21 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({
     }
     
     try {
-      console.log(`Fetching fresh prod history for project ${projectId}`);
-      const gitHistory = await api.getProdHistoryFromGit(projectId);
-      setProdHistory(gitHistory);
+      console.log(`Fetching fresh git history for project ${projectId}`);
+      const history = await api.getGitHistory(projectId);
+      setGitHistory(history);
       
       // Cache the result
-      prodHistoryCache.current.set(projectId, {
-        data: gitHistory,
+      gitHistoryCache.current.set(projectId, {
+        data: history,
         timestamp: Date.now()
       });
       
       // Cleanup cache periodically
-      cleanupCache(prodHistoryCache.current);
+      cleanupCache(gitHistoryCache.current);
     } catch (error) {
-      console.error('Failed to load prod history from git:', error);
-      setProdHistory([]);
+      console.error('Failed to load git history:', error);
+      setGitHistory([]);
     } finally {
       if (isManualRefresh) {
         setIsRefreshing(false);
@@ -407,16 +515,21 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({
   const handleManualRefresh = async () => {
     if (!hasGitRepo || !gitUser) return;
     console.log('Manual refresh triggered - bypassing cache');
-    await Promise.all([
-      loadProdHistory(true, true), // isManualRefresh=true, forceRefresh=true
-      loadPendingPRs(true) // forceRefresh=true
-    ]);
+    if (viewMode === 'git') {
+      await Promise.all([
+        loadGitHistory(true, true), // isManualRefresh=true, forceRefresh=true
+        loadPendingPRs(true) // forceRefresh=true
+      ]);
+    } else {
+      // For development view, just refresh the current entries
+      onHistoryUpdate();
+    }
   };
 
   // Auto-refresh data when git user changes or view mode changes
   useEffect(() => {
-    if (viewMode === 'prod' && hasGitRepo && gitUser) {
-      loadProdHistory();
+    if (viewMode === 'git' && hasGitRepo && gitUser) {
+      loadGitHistory();
       loadPendingPRs();
     } else if (viewMode === 'development') {
       loadBackendHistory();
@@ -430,7 +543,7 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({
     }
   }, [history, viewMode]);
 
-  // Set up auto-refresh interval for production view
+  // Set up auto-refresh interval for git view
   useEffect(() => {
     // Clear any existing interval
     if (refreshIntervalRef.current) {
@@ -438,10 +551,10 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({
     }
 
     // Set up new interval if conditions are met
-    if (viewMode === 'prod' && hasGitRepo && gitUser) {
+    if (viewMode === 'git' && hasGitRepo && gitUser) {
       refreshIntervalRef.current = setInterval(() => {
-        console.log('Auto-refreshing production history (force refresh)...');
-        loadProdHistory(false, true); // isManualRefresh=false, forceRefresh=true
+        console.log('Auto-refreshing git history (force refresh)...');
+        loadGitHistory(false, true); // isManualRefresh=false, forceRefresh=true
         loadPendingPRs(true); // forceRefresh=true
       }, 30000); // 30 seconds
     }
@@ -464,10 +577,10 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({
     }
   };
 
-  const handleViewModeChange = (mode: 'development' | 'prod') => {
+  const handleViewModeChange = (mode: 'development' | 'git') => {
     setViewMode(mode);
-    if (mode === 'prod' && hasGitRepo && gitUser) {
-      loadProdHistory();
+    if (mode === 'git' && hasGitRepo && gitUser) {
+      loadGitHistory();
       loadPendingPRs();
     } else if (mode === 'development') {
       loadBackendHistory();
@@ -475,9 +588,34 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({
   };
 
   // Merge experimental and backend testing history for development view
+  // Separate current entries (id -1 and -2) from regular history
+  const currentProd = viewMode === 'development' 
+    ? history.find(item => item.id === -1)
+    : null;
+  
+  const currentTest = viewMode === 'development' 
+    ? history.find(item => item.id === -2)
+    : null;
+  
+  const regularHistory = viewMode === 'development' 
+    ? [...history.filter(item => item.id !== -1 && item.id !== -2), ...backendHistory]
+    : []; // Git history doesn't include regular history or backend testing
+  
+  // Sort regular history by date (newest first) - ensure proper date parsing
+  const sortedRegularHistory = regularHistory.sort((a, b) => {
+    const dateA = new Date(a.created_at);
+    const dateB = new Date(b.created_at);
+    return dateB.getTime() - dateA.getTime();
+  });
+  
+  // Build final history with current entries always at the top in fixed order
   const mergedHistory = viewMode === 'development' 
-    ? [...history, ...backendHistory].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    : prodHistory;
+    ? [
+        ...(currentProd ? [currentProd] : []),
+        ...(currentTest ? [currentTest] : []),
+        ...sortedRegularHistory
+      ]
+    : gitHistory; // Git history view shows only git commits
   
   const currentHistory = mergedHistory;
 
@@ -489,15 +627,15 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({
             <FlexItem>History Log</FlexItem>
             <FlexItem>
               <Flex spaceItems={{ default: 'spaceItemsSm' }}>
-                {viewMode === 'prod' && gitUser && (
+                {((viewMode === 'development' && hasGitRepo && gitUser) || (viewMode === 'git' && gitUser)) && (
                   <FlexItem>
                     <Button
                       variant="plain"
                       size="sm"
                       icon={isRefreshing ? <Spinner size="sm" /> : <SyncAltIcon />}
-                      onClick={handleManualRefresh}
+                      onClick={viewMode === 'development' ? onHistoryUpdate : handleManualRefresh}
                       isDisabled={isRefreshing}
-                      title="Refresh production history from git"
+                      title={viewMode === 'development' ? 'Refresh current prod/test from git' : 'Refresh git history'}
                     >
                       {isRefreshing ? 'Refreshing...' : ''}
                     </Button>
@@ -507,13 +645,13 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({
                   <FormSelect
                     value={viewMode}
                     onChange={(_event, value) => {
-                      handleViewModeChange(value as 'development' | 'prod');
+                      handleViewModeChange(value as 'development' | 'git');
                     }}
                     aria-label="Select history view"
                     style={{ width: '150px' }}
                   >
                     <FormSelectOption key="" value="development" label="Development" />
-                    <FormSelectOption key="prod" value="prod" label="Production" />
+                    <FormSelectOption key="git" value="git" label="Git History" />
                   </FormSelect>
                 </FlexItem>
               </Flex>
@@ -521,9 +659,9 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({
           </Flex>
         </CardTitle>
         <CardBody>
-          {hasGitRepo && !gitUser && viewMode === 'prod' && (
+          {hasGitRepo && !gitUser && viewMode === 'git' && (
             <Alert variant="warning" title="Git Authentication Required" style={{ marginBottom: '1rem' }}>
-              <p>This project uses git for production prompts. Please authenticate with your git platform to create pull requests.</p>
+              <p>This project uses git for version control. Please authenticate with your git platform to view git history.</p>
               {onGitAuth && (
                 <Button variant="primary" size="sm" onClick={onGitAuth} style={{ marginTop: '0.5rem' }}>
                   Authenticate with Git
@@ -544,7 +682,7 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({
           )}
 
 
-          {viewMode === 'prod' && hasGitRepo && pendingPRs.length > 0 && (
+          {viewMode === 'git' && hasGitRepo && pendingPRs.length > 0 && (
             <Alert variant="info" title="Pending Pull Requests" style={{ marginBottom: '1rem' }}>
               <p>There are {pendingPRs.length} pending pull request(s) for production prompts:</p>
               <ul style={{ marginTop: '0.5rem' }}>
@@ -561,10 +699,10 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({
             </Alert>
           )}
 
-          {viewMode === 'prod' && hasGitRepo && prodHistory.length === 0 && pendingPRs.length === 0 && !isLoading && (
-            <Alert variant="warning" title="No Production Prompts" style={{ marginBottom: '1rem' }}>
-              <p>No prompts have been tagged as production yet, or pending PRs have not been merged.</p>
-              <p>Tag a prompt with the production label to create a pull request in your git repository.</p>
+          {viewMode === 'git' && hasGitRepo && gitHistory.length === 0 && pendingPRs.length === 0 && !isLoading && (
+            <Alert variant="warning" title="No Git History" style={{ marginBottom: '1rem' }}>
+              <p>No commits found for prod or test files in this repository.</p>
+              <p>Create some prompts and tag them as production or test to see git history.</p>
             </Alert>
           )}
 
@@ -572,10 +710,10 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({
             <p>
               {viewMode === 'development' 
                 ? "No development history yet. Generate some responses or test your backend to see them here."
-                : viewMode === 'prod' 
+                : viewMode === 'git' 
                   ? (hasGitRepo 
-                    ? "No production prompts found in git repository."
-                    : "No production history yet. Mark some prompts as production to see them here.")
+                    ? "No git history found for prod or test files."
+                    : "No git repository configured for this project.")
                   : "No history yet."
               }
             </p>
@@ -586,21 +724,47 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({
               paddingRight: '0.5rem'
             }}>
               {currentHistory.map((item, index) => {
-                const isBackendTest = viewMode === 'backend';
+                // In Git History view, skip any backend test items that might have leaked through
+                if (viewMode === 'git') {
+                  const hasBackendTestProps = (item as any).backend_response !== undefined || 
+                                              (item as any).response_time_ms !== undefined;
+                  if (hasBackendTestProps) {
+                    return null; // Skip backend test items in git view
+                  }
+                }
+                
+                // Determine item type based on properties - check for actual values, not just existence
+                const isBackendTest = viewMode === 'development' && (
+                  ((item as any).backend_response !== undefined && (item as any).backend_response !== null) || 
+                  ((item as any).response_time_ms !== undefined && (item as any).response_time_ms !== null)
+                );
+                const isGitCommit = viewMode === 'git';
                 const backendItem = item as BackendTestHistory;
                 const promptItem = item as PromptHistory;
+                const gitItem = item as any; // Git commit item
+                const isCurrentProd = item.id === -1;
+                const isCurrentTest = item.id === -2;
+                const isCurrentEntry = isCurrentProd || isCurrentTest;
                 
                 return (
                   <div 
-                    key={item.id}
+                    key={isGitCommit ? gitItem.sha : item.id}
                     style={{ 
                       padding: '1rem',
                       borderBottom: '1px solid #e5e5e5',
                       marginBottom: '0.5rem',
-                      // Highlight the currently served prompt (first in production list)
-                      backgroundColor: viewMode === 'prod' && index === 0 ? '#f0f8ff' : 'transparent',
-                      borderLeft: viewMode === 'prod' && index === 0 ? '4px solid #0066cc' : 'none',
-                      borderRadius: viewMode === 'prod' && index === 0 ? '4px' : '0'
+                      // Special styling for current entries and git commits
+                      backgroundColor: isCurrentProd ? '#f0f8ff' : 
+                                      isCurrentTest ? '#f0fff0' :
+                                      isGitCommit ? '#f9f9f9' :
+                                      'transparent',
+                      borderLeft: isCurrentProd ? '4px solid #0066cc' : 
+                                  isCurrentTest ? '4px solid #28a745' :
+                                  isGitCommit ? `4px solid ${gitItem.color}` :
+                                  'none',
+                      borderRadius: (isCurrentEntry || isGitCommit) ? '4px' : '0',
+                      // Add a subtle border for current entries and git commits
+                      border: (isCurrentEntry || isGitCommit) ? '1px solid #ddd' : 'none'
                     }}
                   >
                     <div 
@@ -609,48 +773,58 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({
                     >
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <small style={{ color: '#6a6e73' }}>
-                          {formatDate(item.created_at)}
+                          {isGitCommit ? formatDate(gitItem.date) : formatDate(item.created_at)}
                         </small>
                         {/* Show badges based on view mode and item type */}
-                        {viewMode === 'development' && !isBackendTest && promptItem.is_prod && (
-                          <Badge>
-                            <StarIcon style={{ fontSize: '12px', marginRight: '4px' }} />
-                            {promptItem.has_merged_pr ? 'PROD' : 'TEST'}
+                        {isCurrentProd && (
+                          <Badge style={{ backgroundColor: '#0066cc', color: 'white' }}>
+                            🚀 CURRENT PRODUCTION
                           </Badge>
                         )}
-                        {viewMode === 'prod' && index === 0 && (
-                          <Badge>
-                            ⚡ CURRENT
+                        {isCurrentTest && (
+                          <Badge style={{ backgroundColor: '#28a745', color: 'white' }}>
+                            🧪 CURRENT TEST
                           </Badge>
                         )}
-                        {isBackendTest && (
-                          <>
-                            <Badge>
-                              {backendItem.error_message ? 'ERROR' : 'SUCCESS'}
-                            </Badge>
-                            {backendItem.is_test && (
-                              <Badge style={{ marginLeft: '0.5rem' }}>
-                                <StarIcon style={{ fontSize: '12px', marginRight: '4px' }} />
-                                TEST
-                              </Badge>
-                            )}
-                          </>
+                        {isGitCommit && (
+                          <Badge style={{ backgroundColor: gitItem.color, color: 'white' }}>
+                            {gitItem.icon} {gitItem.badge}
+                          </Badge>
                         )}
                       </div>
-                      <p style={{ fontWeight: 'bold', marginTop: '0.25rem', marginBottom: '0.25rem' }}>
-                        {truncateText(item.user_prompt)}
-                      </p>
-                      {!isBackendTest && promptItem.response && (
+                      
+                      {/* Git commit content */}
+                      {isGitCommit ? (
+                        <>
+                          <div style={{ display: 'flex', alignItems: 'center', marginTop: '0.25rem', marginBottom: '0.25rem' }}>
+                            <strong style={{ marginRight: '0.5rem' }}>{gitItem.author}</strong>
+                            <small style={{ color: '#6a6e73' }}>
+                              {gitItem.sha.substring(0, 7)}
+                            </small>
+                          </div>
+                          <p style={{ fontWeight: 'bold', marginTop: '0.25rem', marginBottom: '0.25rem' }}>
+                            {truncateText(gitItem.message)}
+                          </p>
+                          <small style={{ color: '#6a6e73' }}>
+                            Modified: {gitItem.file_path}
+                          </small>
+                        </>
+                      ) : (
+                        <p style={{ fontWeight: 'bold', marginTop: '0.25rem', marginBottom: '0.25rem' }}>
+                          {truncateText(item.user_prompt)}
+                        </p>
+                      )}
+                      {!isGitCommit && !isBackendTest && promptItem.response && (
                         <small style={{ marginTop: '0.25rem', display: 'block' }}>
                           {truncateText(promptItem.response)}
                         </small>
                       )}
-                      {isBackendTest && backendItem.backend_response && (
+                      {!isGitCommit && isBackendTest && backendItem.backend_response && (
                         <small style={{ marginTop: '0.25rem', display: 'block' }}>
                           {truncateText(backendItem.backend_response)}
                         </small>
                       )}
-                      {isBackendTest && backendItem.response_time_ms && (
+                      {!isGitCommit && isBackendTest && backendItem.response_time_ms && (
                         <small style={{ marginTop: '0.25rem', display: 'block', color: '#6a6e73' }}>
                           Response time: {backendItem.response_time_ms}ms
                         </small>
@@ -658,97 +832,147 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({
                     </div>
                     
                     {/* Show appropriate action buttons based on view mode */}
-                    <Flex style={{ marginTop: '0.5rem' }} spaceItems={{ default: 'spaceItemsSm' }}>
-                      {viewMode === 'development' ? (
-                        <>
-                          {/* Show rating and notes buttons only for PromptHistory items */}
-                          {!isBackendTest && (
-                            <>
-                              <FlexItem>
-                                <Button
-                                  variant={promptItem.rating === 'thumbs_up' ? 'primary' : 'tertiary'}
-                                  icon={<ThumbsUpIcon />}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleRating(promptItem, 'thumbs_up');
-                                  }}
-                                  size="sm"
-                                  title="Thumbs up"
-                                />
-                              </FlexItem>
-                              <FlexItem>
-                                <Button
-                                  variant={promptItem.rating === 'thumbs_down' ? 'primary' : 'tertiary'}
-                                  icon={<ThumbsDownIcon />}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleRating(promptItem, 'thumbs_down');
-                                  }}
-                                  size="sm"
-                                  title="Thumbs down"
-                                />
-                              </FlexItem>
-                              <FlexItem>
-                                <Button
-                                  variant={promptItem.notes ? 'primary' : 'tertiary'}
-                                  icon={<EditIcon />}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleNotesClick(promptItem);
-                                  }}
-                                  size="sm"
-                                >
-                                  Notes
-                                </Button>
-                              </FlexItem>
-                            </>
-                          )}
-                          
-                          {/* Test button - available for both PromptHistory and BackendTestHistory */}
-                          <FlexItem>
-                            <Button
-                              variant={isBackendTest ? (backendItem.is_test ? 'primary' : 'tertiary') : (promptItem.is_prod ? 'primary' : 'tertiary')}
-                              icon={<StarIcon />}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (isBackendTest) {
-                                  handleTestClick(backendItem);
-                                } else {
-                                  handleProdClick(promptItem);
+                    {!isCurrentEntry && !isGitCommit && (
+                      <Flex style={{ marginTop: '0.5rem' }} spaceItems={{ default: 'spaceItemsSm' }}>
+                        {viewMode === 'development' ? (
+                          <>
+                            {/* Show rating and notes buttons for both PromptHistory and BackendTestHistory items */}
+                            <FlexItem>
+                              <Button
+                                variant={isBackendTest ? 
+                                  (backendItem.rating === 'thumbs_up' ? 'primary' : 'tertiary') :
+                                  (promptItem.rating === 'thumbs_up' ? 'primary' : 'tertiary')
                                 }
-                              }}
-                              size="sm"
-                              title={isBackendTest ? (backendItem.is_test ? 'Remove test tag' : 'Mark as test') : (promptItem.is_prod ? 'Remove test tag' : 'Mark as test')}
-                            >
-                              Test
-                            </Button>
-                          </FlexItem>
-                          
-                          {/* Prod button - only available for PromptHistory items, and only if already marked as test */}
-                          {!isBackendTest && (
+                                icon={<ThumbsUpIcon />}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (isBackendTest) {
+                                    handleRating(backendItem, 'thumbs_up');
+                                  } else {
+                                    handleRating(promptItem, 'thumbs_up');
+                                  }
+                                }}
+                                size="sm"
+                                title="Thumbs up"
+                              />
+                            </FlexItem>
+                            <FlexItem>
+                              <Button
+                                variant={isBackendTest ? 
+                                  (backendItem.rating === 'thumbs_down' ? 'primary' : 'tertiary') :
+                                  (promptItem.rating === 'thumbs_down' ? 'primary' : 'tertiary')
+                                }
+                                icon={<ThumbsDownIcon />}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (isBackendTest) {
+                                    handleRating(backendItem, 'thumbs_down');
+                                  } else {
+                                    handleRating(promptItem, 'thumbs_down');
+                                  }
+                                }}
+                                size="sm"
+                                title="Thumbs down"
+                              />
+                            </FlexItem>
+                            <FlexItem>
+                              <Button
+                                variant={isBackendTest ? 
+                                  (backendItem.notes ? 'primary' : 'tertiary') :
+                                  (promptItem.notes ? 'primary' : 'tertiary')
+                                }
+                                icon={<EditIcon />}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (isBackendTest) {
+                                    handleNotesClick(backendItem);
+                                  } else {
+                                    handleNotesClick(promptItem);
+                                  }
+                                }}
+                                size="sm"
+                              >
+                                Notes
+                              </Button>
+                            </FlexItem>
+                            
+                            {/* Test button - available for both PromptHistory and BackendTestHistory */}
+                            <FlexItem>
+                              <Button
+                                variant={isBackendTest ? (backendItem.is_test ? 'primary' : 'tertiary') : (promptItem.is_prod ? 'primary' : 'tertiary')}
+                                icon={<StarIcon />}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (isBackendTest) {
+                                    handleTestClick(backendItem);
+                                  } else {
+                                    // For prompt items, use the dedicated test handler
+                                    handlePromptTestClick(promptItem);
+                                  }
+                                }}
+                                size="sm"
+                                title={isBackendTest ? (backendItem.is_test ? 'Remove test tag' : 'Mark as test') : (promptItem.is_prod ? 'Remove test tag' : 'Mark as test')}
+                              >
+                                Test
+                              </Button>
+                            </FlexItem>
+                            
+                            {/* Prod button - available for both PromptHistory and BackendTestHistory items */}
                             <FlexItem>
                               <Button
                                 variant="tertiary"
-                                icon={isCreatingPR && prodItem?.id === promptItem.id ? <Spinner size="sm" /> : <StarIcon />}
+                                icon={isCreatingPR && prodItem?.id === (isBackendTest ? backendItem.id : promptItem.id) ? <Spinner size="sm" /> : <StarIcon />}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleProdButtonClick(promptItem);
+                                  if (isBackendTest) {
+                                    handleBackendProdClick(backendItem);
+                                  } else {
+                                    handleProdButtonClick(promptItem);
+                                  }
                                 }}
                                 size="sm"
-                                title={promptItem.has_merged_pr ? 'Already in production' : promptItem.is_prod ? 'Create production PR' : 'Must mark as test first'}
-                                isDisabled={!promptItem.is_prod || promptItem.has_merged_pr || (isCreatingPR && prodItem?.id === promptItem.id)}
+                                title={isBackendTest ? 
+                                  (backendItem.is_test ? 'Create production PR' : 'Must mark as test first') :
+                                  (promptItem.has_merged_pr ? 'Already in production' : promptItem.is_prod ? 'Create production PR' : 'Must mark as test first')
+                                }
+                                isDisabled={isBackendTest ? 
+                                  !backendItem.is_test || (isCreatingPR && prodItem?.id === backendItem.id) :
+                                  !promptItem.is_prod || promptItem.has_merged_pr || (isCreatingPR && prodItem?.id === promptItem.id)
+                                }
                               >
                                 Prod
                               </Button>
                             </FlexItem>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          {/* Production view - no action buttons needed */}
-                        </>
-                      )}
-                    </Flex>
+                          </>
+                        ) : (
+                          <>
+                            {/* Git view - no action buttons needed */}
+                          </>
+                        )}
+                      </Flex>
+                    )}
+                    
+                    {/* Show read-only indicator for current entries */}
+                    {isCurrentEntry && (
+                      <div style={{ marginTop: '0.5rem', fontSize: '12px', color: '#6a6e73', fontStyle: 'italic' }}>
+                        📖 Read-only view from git repository
+                      </div>
+                    )}
+                    
+                    {/* Show git link for git commits */}
+                    {isGitCommit && (
+                      <div style={{ marginTop: '0.5rem', fontSize: '12px' }}>
+                        <a 
+                          href={gitItem.url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          style={{ color: '#0066cc', textDecoration: 'none' }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          🔗 View commit in {gitUser?.git_platform || 'git'}
+                        </a>
+                      </div>
+                    )}
                   </div>
                 );
               })}

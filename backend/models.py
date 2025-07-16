@@ -97,6 +97,8 @@ class BackendTestHistory(Base):
     response_time_ms = Column(Integer, nullable=True)  # Response time in milliseconds
     status_code = Column(Integer, nullable=True)  # HTTP status code from backend
     error_message = Column(Text, nullable=True)  # Error message if test failed
+    rating = Column(String, nullable=True)  # 'thumbs_up', 'thumbs_down', or null
+    notes = Column(Text, nullable=True)
     is_test = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     

@@ -1161,3 +1161,55 @@ class GitService:
         except Exception as e:
             print(f"Failed to save test settings to git: {e}")
             raise e
+    
+    def get_unified_git_history(self, platform: str, token: str, repo_url: str, project_name: str, provider_id: str, limit: int = 20) -> List[Dict]:
+        """Get unified commit history for both prod and test files"""
+        try:
+            prod_file_path = f"{project_name}/{provider_id}/prompt_prod.json"
+            test_file_path = f"{project_name}/{provider_id}/prompt_test.json"
+            
+            print(f"🔍 Getting unified git history for project: {project_name}")
+            print(f"   Prod file: {prod_file_path}")
+            print(f"   Test file: {test_file_path}")
+            
+            # Get commits for both files
+            print(f"🔍 Getting prod commits for: {prod_file_path}")
+            prod_commits = self.get_file_commit_history(platform, token, repo_url, prod_file_path, limit)
+            print(f"🔍 Found {len(prod_commits)} prod commits")
+            
+            print(f"🔍 Getting test commits for: {test_file_path}")
+            test_commits = self.get_file_commit_history(platform, token, repo_url, test_file_path, limit)
+            print(f"🔍 Found {len(test_commits)} test commits")
+            
+            # Add file type to each commit
+            for commit in prod_commits:
+                commit['file_type'] = 'prod'
+                commit['file_path'] = prod_file_path
+                commit['icon'] = '🚀'
+                commit['badge'] = 'PROD'
+                commit['color'] = '#0066cc'
+                
+            for commit in test_commits:
+                commit['file_type'] = 'test'
+                commit['file_path'] = test_file_path
+                commit['icon'] = '🧪'
+                commit['badge'] = 'TEST'
+                commit['color'] = '#28a745'
+            
+            # Combine and sort by date (newest first)
+            all_commits = prod_commits + test_commits
+            all_commits.sort(key=lambda x: x['date'], reverse=True)
+            
+            # Limit the total results
+            unified_commits = all_commits[:limit]
+            
+            print(f"🔍 Found {len(prod_commits)} prod commits and {len(test_commits)} test commits")
+            print(f"🔍 Returning {len(unified_commits)} unified commits")
+            
+            return unified_commits
+            
+        except Exception as e:
+            print(f"Failed to get unified git history: {e}")
+            import traceback
+            traceback.print_exc()
+            return []

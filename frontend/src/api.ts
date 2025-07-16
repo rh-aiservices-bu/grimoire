@@ -217,6 +217,11 @@ export const api = {
     return response.data;
   },
 
+  getGitHistory: async (projectId: number): Promise<any[]> => {
+    const response = await axios.get(`${API_BASE}/projects/${projectId}/git-history`);
+    return response.data;
+  },
+
   syncPRStatus: async (projectId: number): Promise<{ message: string }> => {
     const response = await axios.post(`${API_BASE}/projects/${projectId}/sync-prs`);
     return response.data;
@@ -234,6 +239,8 @@ export const api = {
     historyId: number,
     data: {
       is_test?: boolean;
+      rating?: string;
+      notes?: string;
     }
   ): Promise<BackendTestHistory> => {
     const response = await axios.put(`${API_BASE}/projects/${projectId}/backend-history/${historyId}`, data);
@@ -356,6 +363,16 @@ export const api = {
     commit_url?: string;
   }> => {
     const response = await axios.post(`${API_BASE}/projects/${projectId}/backend-history/${historyId}/tag-test`);
+    return response.data;
+  },
+
+  // Tag backend test as prod
+  tagBackendTestAsProd: async (projectId: number, historyId: number): Promise<{
+    message: string;
+    pr_url: string;
+    pr_number: number;
+  }> => {
+    const response = await axios.post(`${API_BASE}/projects/${projectId}/backend-history/${historyId}/tag-prod`);
     return response.data;
   },
 
