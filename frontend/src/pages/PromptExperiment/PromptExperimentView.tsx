@@ -20,13 +20,10 @@ import {
   Tab,
   TabTitleText,
 } from '@patternfly/react-core';
-import { Project, PromptHistory, ModelParameters, GitUser } from '../types';
-import { api } from '../api';
-import { HistoryLog } from './HistoryLog';
-import { ProjectEditModal } from './ProjectEditModal';
-import { DeleteProjectModal } from './DeleteProjectModal';
-import { ApiDocumentationModal } from './ApiDocumentationModal';
-import { BackendTesting } from './BackendTesting';
+import { Project, PromptHistory, ModelParameters, GitUser } from '../../types';
+import { api } from '../../api';
+import { HistoryLog, BackendTesting } from '../../components/shared';
+import { ProjectEditModal, DeleteProjectModal, ApiDocumentationModal } from '../../components/modals';
 
 interface PromptExperimentViewProps {
   project: Project;

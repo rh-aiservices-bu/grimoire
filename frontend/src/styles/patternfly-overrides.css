@@ -1,0 +1,77 @@
+/* PatternFly compliant overrides and customizations */
+
+/* Use PatternFly's design system properly */
+.pf-c-page {
+  --pf-c-page--BackgroundColor: var(--pf-global--BackgroundColor--light-100);
+}
+
+/* Proper PatternFly spacing */
+.pf-c-page__main-section {
+  --pf-c-page__main-section--PaddingTop: var(--pf-global--spacer--md);
+  --pf-c-page__main-section--PaddingRight: var(--pf-global--spacer--md);
+  --pf-c-page__main-section--PaddingBottom: var(--pf-global--spacer--md);
+  --pf-c-page__main-section--PaddingLeft: var(--pf-global--spacer--md);
+}
+
+/* Full-width applications can use this class */
+.app-full-width .pf-c-page__main-section {
+  --pf-c-page__main-section--PaddingTop: var(--pf-global--spacer--sm);
+  --pf-c-page__main-section--PaddingRight: var(--pf-global--spacer--sm);
+  --pf-c-page__main-section--PaddingBottom: var(--pf-global--spacer--sm);
+  --pf-c-page__main-section--PaddingLeft: var(--pf-global--spacer--sm);
+}
+
+/* Custom scrollbar styling that respects PatternFly theming */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--pf-global--Color--200) var(--pf-global--BackgroundColor--light-300);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: var(--pf-global--BackgroundColor--light-300);
+  border-radius: var(--pf-global--BorderRadius--sm);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--pf-global--Color--200);
+  border-radius: var(--pf-global--BorderRadius--sm);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--pf-global--Color--300);
+}
+
+/* Proper notification positioning */
+.pf-c-alert-group.pf-m-toast {
+  z-index: var(--pf-global--ZIndex--2xl);
+}
+
+/* Utility classes for better layout */
+.full-height {
+  height: 100vh;
+}
+
+.scroll-container {
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+}
+
+/* Proper modal backdrop */
+.pf-c-backdrop {
+  z-index: var(--pf-global--ZIndex--xl);
+}
+
+/* Enhanced grid spacing */
+.pf-l-grid.enhanced-spacing {
+  --pf-l-grid--GridGap: var(--pf-global--spacer--md);
+}
+
+/* Card enhancements for better spacing */
+.pf-c-card.enhanced-card {
+  --pf-c-card--BackgroundColor: var(--pf-global--BackgroundColor--100);
+  --pf-c-card--BoxShadow: var(--pf-global--BoxShadow--sm);
+}

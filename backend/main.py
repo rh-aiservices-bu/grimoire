@@ -214,14 +214,22 @@ async def get_prompt_history(project_id: int, db: Session = Depends(get_db)):
                     
                     # Get current production prompt from git
                     try:
-                        current_prod = git_service.get_prod_prompt_from_git(
+                        current_prod_result = git_service.get_prod_prompt_from_git(
                             user.git_platform,
                             token,
                             project.git_repo_url,
                             project.name,
                             project.provider_id
                         )
-                        if current_prod:
+                        if current_prod_result:
+                            current_prod = current_prod_result['prompt_data']
+                            commit_timestamp = current_prod_result.get('commit_timestamp')
+                            
+                            # Use commit timestamp if available, otherwise fallback to current time
+                            created_at = commit_timestamp if commit_timestamp else datetime.now()
+                            if isinstance(created_at, str):
+                                created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                            
                             prod_entry = PromptHistoryResponse(
                                 id=-1,  # Special ID for current prod
                                 project_id=project_id,
@@ -238,7 +246,7 @@ async def get_prompt_history(project_id: int, db: Session = Depends(get_db)):
                                 notes="🚀 PRODUCTION - Active in git repository",
                                 is_prod=True,
                                 has_merged_pr=False,
-                                created_at=datetime.now()
+                                created_at=created_at
                             )
                             result.append(prod_entry)
                     except Exception as e:
@@ -246,14 +254,22 @@ async def get_prompt_history(project_id: int, db: Session = Depends(get_db)):
                     
                     # Get current test settings from git
                     try:
-                        current_test = git_service.get_test_settings_from_git(
+                        current_test_result = git_service.get_test_settings_from_git(
                             user.git_platform,
                             token,
                             project.git_repo_url,
                             project.name,
                             project.provider_id
                         )
-                        if current_test:
+                        if current_test_result:
+                            current_test = current_test_result['test_settings']
+                            commit_timestamp = current_test_result.get('commit_timestamp')
+                            
+                            # Use commit timestamp if available, otherwise fallback to current time
+                            created_at = commit_timestamp if commit_timestamp else datetime.now()
+                            if isinstance(created_at, str):
+                                created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                            
                             test_entry = PromptHistoryResponse(
                                 id=-2,  # Special ID for current test
                                 project_id=project_id,
@@ -270,7 +286,7 @@ async def get_prompt_history(project_id: int, db: Session = Depends(get_db)):
                                 notes="🧪 TEST - Active test configuration in git",
                                 is_prod=False,
                                 has_merged_pr=False,
-                                created_at=datetime.now()
+                                created_at=created_at
                             )
                             result.append(test_entry)
                     except Exception as e:
@@ -827,7 +843,7 @@ async def get_prod_prompt(project_name: str, provider_id: str, db: Session = Dep
         if user:
             try:
                 token = git_service.decrypt_token(user.git_access_token)
-                prod_prompt = git_service.get_prod_prompt_from_git(
+                prod_prompt_result = git_service.get_prod_prompt_from_git(
                     user.git_platform,
                     token,
                     project.git_repo_url,
@@ -835,7 +851,8 @@ async def get_prod_prompt(project_name: str, provider_id: str, db: Session = Dep
                     project.provider_id
                 )
                 
-                if prod_prompt:
+                if prod_prompt_result:
+                    prod_prompt = prod_prompt_result['prompt_data']
                     return LatestPromptResponse(
                         userPrompt=prod_prompt.user_prompt,
                         systemPrompt=prod_prompt.system_prompt,
@@ -1910,7 +1927,7 @@ async def get_test_settings(project_id: int, db: Session = Depends(get_db)):
         if user:
             try:
                 token = git_service.decrypt_token(user.git_access_token)
-                test_settings = git_service.get_test_settings_from_git(
+                test_settings_result = git_service.get_test_settings_from_git(
                     user.git_platform,
                     token,
                     project.git_repo_url,
@@ -1918,7 +1935,8 @@ async def get_test_settings(project_id: int, db: Session = Depends(get_db)):
                     project.provider_id
                 )
                 
-                if test_settings:
+                if test_settings_result:
+                    test_settings = test_settings_result['test_settings']
                     return TestSettingsResponse(**test_settings)
             except Exception as e:
                 print(f"Failed to get test settings from git: {e}")

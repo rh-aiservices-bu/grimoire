@@ -8,7 +8,7 @@ import {
   GalleryItem,
   Title,
 } from '@patternfly/react-core';
-import { Project } from '../types';
+import { Project } from '../../types';
 
 interface ProjectListProps {
   projects: Project[];

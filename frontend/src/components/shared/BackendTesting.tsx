@@ -23,9 +23,9 @@ import {
   Modal,
   ModalVariant,
 } from '@patternfly/react-core';
-import { Project, ModelParameters } from '../types';
-import { api } from '../api';
-import { GitAuthModal } from './GitAuthModal';
+import { Project, ModelParameters } from '../../types';
+import { api } from '../../api';
+import { GitAuthModal } from '../modals';
 
 interface BackendTestingProps {
   project: Project;

@@ -138,7 +138,7 @@ class ProdPromptData(BaseModel):
     top_p: Optional[float] = None
     top_k: Optional[int] = None
     variables: Optional[Dict[str, str]] = None
-    created_at: str
+    created_at: Optional[str] = None
 
 class BackendTestRequest(BaseModel):
     prompt: str
@@ -184,7 +184,7 @@ class TestPromptData(BaseModel):
     top_p: Optional[float] = None
     top_k: Optional[int] = None
     variables: Optional[Dict[str, str]] = None
-    created_at: str
+    created_at: Optional[str] = None
 
 class TestSettingsRequest(BaseModel):
     userPrompt: Optional[str] = None

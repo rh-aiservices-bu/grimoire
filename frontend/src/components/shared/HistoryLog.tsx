@@ -22,10 +22,9 @@ import {
   Spinner,
 } from '@patternfly/react-core';
 import { ThumbsUpIcon, ThumbsDownIcon, EditIcon, StarIcon, SyncAltIcon } from '@patternfly/react-icons';
-import { PromptHistory, PendingPR, GitUser } from '../types';
-import { NotesModal } from './NotesModal';
-import { ProdConfirmationModal } from './ProdConfirmationModal';
-import { api } from '../api';
+import { PromptHistory, PendingPR, GitUser } from '../../types';
+import { NotesModal, ProdConfirmationModal } from '../modals';
+import { api } from '../../api';
 
 interface HistoryLogProps {
   history: PromptHistory[];

@@ -11,7 +11,7 @@ import {
   ModalFooter,
   ModalHeader,
 } from '@patternfly/react-core';
-import { Project } from '../types';
+import { Project } from '../../types';
 
 interface ProjectEditModalProps {
   isOpen: boolean;

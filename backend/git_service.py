@@ -428,8 +428,7 @@ class GitService:
                     "max_len": prompt_data.max_len,
                     "top_p": prompt_data.top_p,
                     "top_k": prompt_data.top_k,
-                    "variables": prompt_data.variables,
-                    "created_at": prompt_data.created_at
+                    "variables": prompt_data.variables
                 }
                 
                 file_content = json.dumps(prompt_json, indent=2)
@@ -508,8 +507,7 @@ class GitService:
                     "max_len": prompt_data.max_len,
                     "top_p": prompt_data.top_p,
                     "top_k": prompt_data.top_k,
-                    "variables": prompt_data.variables,
-                    "created_at": prompt_data.created_at
+                    "variables": prompt_data.variables
                 }
                 
                 file_content = json.dumps(prompt_json, indent=2)
@@ -596,8 +594,7 @@ class GitService:
                     "max_len": prompt_data.max_len,
                     "top_p": prompt_data.top_p,
                     "top_k": prompt_data.top_k,
-                    "variables": prompt_data.variables,
-                    "created_at": prompt_data.created_at
+                    "variables": prompt_data.variables
                 }
                 
                 file_content = json.dumps(prompt_json, indent=2)
@@ -654,8 +651,8 @@ class GitService:
             print(f"Failed to create prompt PR: {e}")
             return None
     
-    def get_prod_prompt_from_git(self, platform: str, token: str, repo_url: str, project_name: str, provider_id: str) -> Optional[ProdPromptData]:
-        """Get the current production prompt from git repository"""
+    def get_prod_prompt_from_git(self, platform: str, token: str, repo_url: str, project_name: str, provider_id: str) -> Optional[Dict[str, Any]]:
+        """Get the current production prompt from git repository with commit timestamp"""
         try:
             _, owner, repo = self.parse_git_url(repo_url)
             api_base = self.get_api_base_url(platform, None, repo_url)
@@ -663,6 +660,12 @@ class GitService:
             
             file_path = f"{project_name}/{provider_id}/prompt_prod.json"
             print(f"Looking for prod prompt at: {file_path}")
+            
+            # First get the latest commit for this file to get timestamp
+            commit_history = self.get_file_commit_history(platform, token, repo_url, file_path, limit=1)
+            latest_commit_date = None
+            if commit_history:
+                latest_commit_date = commit_history[0]['date']
             
             if platform == 'github':
                 file_url = f"{api_base}/repos/{owner}/{repo}/contents/{file_path}"
@@ -680,7 +683,11 @@ class GitService:
                     if 'created_at' in prompt_json and prompt_json['created_at'] is None:
                         prompt_json['created_at'] = "2024-01-01T00:00:00"
                     
-                    return ProdPromptData(**prompt_json)
+                    # Return both the prompt data and the commit timestamp
+                    return {
+                        'prompt_data': ProdPromptData(**prompt_json),
+                        'commit_timestamp': latest_commit_date
+                    }
                 else:
                     print(f"File not found: {response.text}")
                     return None
@@ -704,7 +711,11 @@ class GitService:
                     if 'created_at' in prompt_json and prompt_json['created_at'] is None:
                         prompt_json['created_at'] = "2024-01-01T00:00:00"
                     
-                    return ProdPromptData(**prompt_json)
+                    # Return both the prompt data and the commit timestamp
+                    return {
+                        'prompt_data': ProdPromptData(**prompt_json),
+                        'commit_timestamp': latest_commit_date
+                    }
                 else:
                     print(f"File not found: {response.text}")
                     return None
@@ -726,7 +737,11 @@ class GitService:
                     if 'created_at' in prompt_json and prompt_json['created_at'] is None:
                         prompt_json['created_at'] = "2024-01-01T00:00:00"
                     
-                    return ProdPromptData(**prompt_json)
+                    # Return both the prompt data and the commit timestamp
+                    return {
+                        'prompt_data': ProdPromptData(**prompt_json),
+                        'commit_timestamp': latest_commit_date
+                    }
                 else:
                     print(f"File not found: {response.text}")
                     return None
@@ -960,7 +975,7 @@ class GitService:
             return None
     
     def get_test_settings_from_git(self, platform: str, token: str, repo_url: str, project_name: str, provider_id: str) -> Optional[Dict]:
-        """Get test settings from git repository"""
+        """Get test settings from git repository with commit timestamp"""
         try:
             _, owner, repo = self.parse_git_url(repo_url)
             api_base = self.get_api_base_url(platform, repo_url)
@@ -969,6 +984,12 @@ class GitService:
             
             file_path = f"{project_name}/{provider_id}/prompt_test.json"
             
+            # First get the latest commit for this file to get timestamp
+            commit_history = self.get_file_commit_history(platform, token, repo_url, file_path, limit=1)
+            latest_commit_date = None
+            if commit_history:
+                latest_commit_date = commit_history[0]['date']
+            
             if platform == 'github':
                 file_url = f"{api_base}/repos/{owner}/{repo}/contents/{file_path}"
                 response = requests.get(file_url, headers=headers)
@@ -976,7 +997,13 @@ class GitService:
                 if response.status_code == 200:
                     file_data = response.json()
                     content = base64.b64decode(file_data['content']).decode()
-                    return json.loads(content)
+                    test_settings = json.loads(content)
+                    
+                    # Return both the test settings and the commit timestamp
+                    return {
+                        'test_settings': test_settings,
+                        'commit_timestamp': latest_commit_date
+                    }
                 else:
                     print(f"Test settings file not found: {response.status_code}")
                     return None
@@ -988,7 +1015,13 @@ class GitService:
                 if response.status_code == 200:
                     file_data = response.json()
                     content = base64.b64decode(file_data['content']).decode()
-                    return json.loads(content)
+                    test_settings = json.loads(content)
+                    
+                    # Return both the test settings and the commit timestamp
+                    return {
+                        'test_settings': test_settings,
+                        'commit_timestamp': latest_commit_date
+                    }
                 else:
                     print(f"Test settings file not found: {response.status_code}")
                     return None
@@ -1000,7 +1033,13 @@ class GitService:
                 if response.status_code == 200:
                     file_data = response.json()
                     content = base64.b64decode(file_data['content']).decode()
-                    return json.loads(content)
+                    test_settings = json.loads(content)
+                    
+                    # Return both the test settings and the commit timestamp
+                    return {
+                        'test_settings': test_settings,
+                        'commit_timestamp': latest_commit_date
+                    }
                 else:
                     print(f"Test settings file not found: {response.status_code}")
                     return None

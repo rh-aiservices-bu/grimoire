@@ -10,7 +10,7 @@ import {
   Alert,
 } from '@patternfly/react-core';
 import { ExclamationTriangleIcon } from '@patternfly/react-icons';
-import { Project } from '../types';
+import { Project } from '../../types';
 
 interface DeleteProjectModalProps {
   isOpen: boolean;
