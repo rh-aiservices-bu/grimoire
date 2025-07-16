@@ -1187,14 +1187,14 @@ class GitService:
                 commit['file_path'] = prod_file_path
                 commit['icon'] = '🚀'
                 commit['badge'] = 'PROD'
-                commit['color'] = '#0066cc'
+                commit['color'] = '#28a745'
                 
             for commit in test_commits:
                 commit['file_type'] = 'test'
                 commit['file_path'] = test_file_path
                 commit['icon'] = '🧪'
                 commit['badge'] = 'TEST'
-                commit['color'] = '#28a745'
+                commit['color'] = '#fd7e14'
             
             # Combine and sort by date (newest first)
             all_commits = prod_commits + test_commits

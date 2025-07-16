@@ -414,14 +414,14 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({
       loadGitHistory();
       loadPendingPRs();
     } else if (viewMode === 'development') {
-      loadBackendHistory();
+      onHistoryUpdate();
     }
   }, [gitUser, viewMode, hasGitRepo]);
 
   // Reload backend history when parent history changes (e.g., after backend test completes)
   useEffect(() => {
     if (viewMode === 'development') {
-      loadBackendHistory();
+      onHistoryUpdate();
     }
   }, [history, viewMode]);
 
@@ -456,7 +456,7 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({
       loadGitHistory();
       loadPendingPRs();
     } else if (mode === 'development') {
-      loadBackendHistory();
+      onHistoryUpdate();
     }
   };
 
@@ -628,12 +628,12 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({
                       borderBottom: '1px solid #e5e5e5',
                       marginBottom: '0.5rem',
                       // Special styling for current entries and git commits
-                      backgroundColor: isCurrentProd ? '#f0f8ff' : 
-                                      isCurrentTest ? '#f0fff0' :
+                      backgroundColor: isCurrentProd ? '#f0fff0' : 
+                                      isCurrentTest ? '#fff3cd' :
                                       isGitCommit ? '#f9f9f9' :
                                       'transparent',
-                      borderLeft: isCurrentProd ? '4px solid #0066cc' : 
-                                  isCurrentTest ? '4px solid #28a745' :
+                      borderLeft: isCurrentProd ? '4px solid #28a745' : 
+                                  isCurrentTest ? '4px solid #fd7e14' :
                                   isGitCommit ? `4px solid ${gitItem.color}` :
                                   'none',
                       borderRadius: (isCurrentEntry || isGitCommit) ? '4px' : '0',
@@ -651,13 +651,13 @@ export const HistoryLog: React.FC<HistoryLogProps> = ({
                         </small>
                         {/* Show badges based on view mode and item type */}
                         {isCurrentProd && (
-                          <Badge style={{ backgroundColor: '#0066cc', color: 'white' }}>
-                            🚀 CURRENT PRODUCTION
+                          <Badge style={{ backgroundColor: '#28a745', color: 'white' }}>
+                            🚀 PRODUCTION
                           </Badge>
                         )}
                         {isCurrentTest && (
-                          <Badge style={{ backgroundColor: '#28a745', color: 'white' }}>
-                            🧪 CURRENT TEST
+                          <Badge style={{ backgroundColor: '#fd7e14', color: 'white' }}>
+                            🧪 TEST
                           </Badge>
                         )}
                         {isGitCommit && (

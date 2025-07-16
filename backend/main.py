@@ -235,7 +235,7 @@ async def get_prompt_history(project_id: int, db: Session = Depends(get_db)):
                                 response=None,
                                 backend_response=None,
                                 rating=None,
-                                notes="🚀 CURRENT PRODUCTION - Active in git repository",
+                                notes="🚀 PRODUCTION - Active in git repository",
                                 is_prod=True,
                                 has_merged_pr=False,
                                 created_at=datetime.now()
@@ -267,7 +267,7 @@ async def get_prompt_history(project_id: int, db: Session = Depends(get_db)):
                                 response=None,
                                 backend_response=None,
                                 rating=None,
-                                notes="🧪 CURRENT TEST - Active test configuration in git",
+                                notes="🧪 TEST - Active test configuration in git",
                                 is_prod=False,
                                 has_merged_pr=False,
                                 created_at=datetime.now()
@@ -1285,13 +1285,13 @@ async def tag_backend_test_as_test(
         
         # Convert test data to settings format
         settings_data = {
-            "userPrompt": test_data.user_prompt,
-            "systemPrompt": test_data.system_prompt,
+            "user_prompt": test_data.user_prompt,
+            "system_prompt": test_data.system_prompt,
             "variables": test_data.variables,
             "temperature": test_data.temperature,
-            "maxLen": test_data.max_len,
-            "topP": test_data.top_p,
-            "topK": test_data.top_k,
+            "max_len": test_data.max_len,
+            "top_p": test_data.top_p,
+            "top_k": test_data.top_k,
             "created_at": test_data.created_at  # Already a string from isoformat()
         }
         
@@ -1951,13 +1951,13 @@ async def save_test_settings(
         
         # Convert settings to dict
         settings_dict = {
-            "userPrompt": settings.userPrompt,
-            "systemPrompt": settings.systemPrompt,
+            "user_prompt": settings.userPrompt,
+            "system_prompt": settings.systemPrompt,
             "variables": settings.variables,
             "temperature": settings.temperature,
-            "maxLen": settings.maxLen,
-            "topP": settings.topP,
-            "topK": settings.topK
+            "max_len": settings.maxLen,
+            "top_p": settings.topP,
+            "top_k": settings.topK
         }
         
         # Save to git
