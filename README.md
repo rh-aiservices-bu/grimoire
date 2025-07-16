@@ -1,4 +1,4 @@
-# Prompt Experimentation Tool
+# Grimoire - Prompt Experimentation Tool
 
 A web application built with PatternFly for experimenting with prompts using Llama Stack models. This tool allows you to create projects, configure model parameters, experiment with user and system prompts, use template variables, and track your prompt history.
 
@@ -18,6 +18,7 @@ A web application built with PatternFly for experimenting with prompts using Lla
 - **Database Persistence**: SQLite database for storing projects and history
 - **API Access**: External API endpoints for integration with other systems
 - **OpenShift Ready**: Includes Containerfile and Helm chart for deployment
+- **Branded Interface**: Features the Grimoire logo and consistent branding throughout the application
 
 ## Quick Start
 

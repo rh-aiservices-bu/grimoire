@@ -203,3 +203,34 @@ class TestSettingsResponse(BaseModel):
     maxLen: Optional[int] = 1000
     topP: Optional[float] = 0.9
     topK: Optional[int] = 50
+
+class EvalRequest(BaseModel):
+    dataset: str
+    eval_config: Dict[str, Any]
+    backend_url: str
+    user_prompt: str
+    system_prompt: Optional[str] = None
+    variables: Optional[Dict[str, str]] = None
+    temperature: Optional[float] = 0.7
+    max_len: Optional[int] = 1000
+    top_p: Optional[float] = 0.9
+    top_k: Optional[int] = 50
+
+class EvalTestResult(BaseModel):
+    input_query: str
+    generated_answer: str
+    expected_answer: str
+    scoring_results: Optional[Dict[str, Any]] = None  # All scoring function results
+
+class EvalResponse(BaseModel):
+    results: List[EvalTestResult]
+    summary: Optional[Dict[str, Any]] = None
+    total_tests: int
+    avg_score: Optional[float] = None
+    status: str = "completed"
+    scoring_functions: Optional[Dict[str, Any]] = None  # All scoring function results
+    variables: Optional[Dict[str, str]] = None
+    temperature: Optional[float] = 0.7
+    maxLen: Optional[int] = 1000
+    topP: Optional[float] = 0.9
+    topK: Optional[int] = 50

@@ -322,6 +322,38 @@ export const api = {
     }
   },
 
+  // Evaluation
+  runEvaluation: async (
+    projectId: number,
+    data: {
+      dataset: string;
+      eval_config: any;
+      backend_url: string;
+      user_prompt: string;
+      system_prompt?: string;
+      variables?: Record<string, string>;
+      temperature?: number;
+      max_len?: number;
+      top_p?: number;
+      top_k?: number;
+    }
+  ): Promise<{
+    results: Array<{
+      input_query: string;
+      generated_answer: string;
+      expected_answer: string;
+      scoring_results?: Record<string, any>;
+    }>;
+    summary?: Record<string, any>;
+    total_tests: number;
+    avg_score?: number;
+    status: string;
+    scoring_functions?: Record<string, any>;
+  }> => {
+    const response = await axios.post(`${API_BASE}/projects/${projectId}/eval`, data);
+    return response.data;
+  },
+
   // Test Settings
   getTestSettings: async (projectId: number): Promise<{
     userPrompt?: string;

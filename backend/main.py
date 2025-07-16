@@ -8,10 +8,15 @@ import re
 import asyncio
 import threading
 import queue
+import logging
+import httpx
+import requests
+import time
 from datetime import datetime
 
 from llama_stack_client import LlamaStackClient
 from llama_stack_client.lib.inference.event_logger import EventLogger
+from llama_stack_client import NotFoundError as LlamaStackNotFoundError
 
 from database import get_db
 from models import Project, PromptHistory, User, PendingPR, GitCommitCache, BackendTestHistory
@@ -22,7 +27,7 @@ from schemas import (
     ProjectSummary, ProjectsModelsResponse, UserCreate, UserResponse,
     PendingPRResponse, GitAuthRequest, ProdPromptData, BackendTestHistoryResponse,
     BackendTestRequest, BackendTestHistoryUpdate, TestPromptData,
-    TestSettingsRequest, TestSettingsResponse
+    TestSettingsRequest, TestSettingsResponse, EvalRequest, EvalResponse, EvalTestResult
 )
 from git_service import GitService
 
@@ -751,6 +756,295 @@ async def test_backend(
             "Access-Control-Allow-Headers": "*",
         }
     )
+
+# Evaluation endpoint
+@app.post("/api/projects/{project_id}/eval", response_model=EvalResponse, tags=["Backend Testing"])
+async def run_evaluation(
+    project_id: int,
+    request: EvalRequest,
+    db: Session = Depends(get_db)
+):
+    """Run evaluation against a dataset using LlamaStack scoring."""
+    import yaml
+    
+    # Set up logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+    
+    logger.info(f"Starting evaluation for project {project_id}")
+    logger.info(f"Request data: dataset={request.dataset}, backend_url={request.backend_url}")
+    
+    # Debug the request object
+    try:
+        logger.info(f"Request type: {type(request)}")
+        logger.info(f"Request dict: {request.dict()}")
+        logger.info(f"Eval config type: {type(request.eval_config)}")
+        logger.info(f"Eval config: {request.eval_config}")
+    except Exception as e:
+        logger.error(f"Error logging request details: {str(e)}")
+    
+    # Get project
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        logger.error(f"Project {project_id} not found")
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    logger.info(f"Project found: {project.name}, llamastack_url={project.llamastack_url}")
+    
+    if not project.llamastack_url:
+        logger.error("No LlamaStack URL configured")
+        raise HTTPException(status_code=400, detail="No LlamaStack URL configured for this project")
+        
+    if not request.backend_url:
+        logger.error("Backend URL is required")
+        raise HTTPException(status_code=400, detail="Backend URL is required")
+    
+    try:
+        logger.info("Initializing LlamaStack client...")
+        # Initialize LlamaStack client
+        lls_client = LlamaStackClient(
+            base_url=project.llamastack_url,
+            timeout=600.0
+        )
+        logger.info("LlamaStack client initialized successfully")
+        
+        # For now, use the test data from eval_config
+        # TODO: In the future, load actual dataset from HuggingFace
+        logger.info("Extracting tests from eval_config...")
+        tests = request.eval_config.get("tests", [])
+        logger.info(f"Found {len(tests)} tests in eval_config")
+        
+        if not tests:
+            logger.error("No tests found in eval config")
+            raise HTTPException(status_code=400, detail="No tests found in eval config")
+        
+        # Function to send request to backend
+        def send_request_to_backend(prompt, backend_url):
+            full_response = ""
+            
+            try:
+                logger.info(f"Sending prompt to backend: {prompt[:100]}...")
+                # Process template variables
+                processed_prompt = process_template_variables(prompt, request.variables or {})
+                
+                # Use the same simple payload format as the working backend test endpoint
+                payload = {"prompt": processed_prompt}
+                
+                logger.info(f"Payload: {payload}")
+                logger.info(f"Backend URL: {backend_url}")
+                
+                # Send request to backend with timing (same as working backend test)
+                start_time = time.time()
+                backend_response = requests.post(
+                    backend_url,
+                    json=payload,
+                    stream=True,
+                    timeout=30
+                )
+                response_time_ms = int((time.time() - start_time) * 1000)
+                logger.info(f"Backend response status: {backend_response.status_code}, time: {response_time_ms}ms")
+                
+                if not backend_response.ok:
+                    error_msg = f"Backend returned {backend_response.status_code}: {backend_response.text}"
+                    logger.error(error_msg)
+                    return f"Error: {error_msg}"
+                
+                # Handle streaming response (same as working backend test)
+                for line in backend_response.iter_lines():
+                    if line:
+                        line_text = line.decode('utf-8')
+                        if line_text.startswith('data: '):
+                            try:
+                                data = json.loads(line_text[6:])
+                                if data.get('delta'):
+                                    full_response += data['delta']
+                            except json.JSONDecodeError:
+                                continue
+                
+                logger.info(f"Full response length: {len(full_response)}")
+                return full_response
+                            
+            except Exception as e:
+                logger.error(f"Error in send_request_to_backend: {str(e)}")
+                return f"Error: {str(e)}"
+        
+        # Create eval_rows by running tests through backend
+        logger.info("Starting to run tests through backend...")
+        eval_rows = []
+        for i, test in enumerate(tests):
+            logger.info(f"Processing test {i+1}/{len(tests)}")
+            prompt = test.get("prompt", "")
+            expected_result = test.get("expected_result", "")
+            
+            logger.info(f"Test {i+1}: prompt='{prompt}', expected='{expected_result}'")
+            
+            generated_answer = send_request_to_backend(prompt, request.backend_url)
+            logger.info(f"Test {i+1}: generated_answer='{generated_answer[:100]}...'")
+            
+            eval_rows.append({
+                "input_query": prompt,
+                "generated_answer": generated_answer,
+                "expected_answer": expected_result,
+            })
+        
+        logger.info(f"Created {len(eval_rows)} eval rows")
+        
+        # Get scoring params from eval_config
+        logger.info("Processing scoring params...")
+        scoring_params = request.eval_config.get("scoring_params", {})
+        logger.info(f"Original scoring_params: {scoring_params}")
+        
+        # Replace template variables in scoring params
+        if "llm-as-judge::base" in scoring_params:
+            judge_config = scoring_params["llm-as-judge::base"]
+            if "judge_model" in judge_config:
+                judge_config["judge_model"] = project.provider_id
+                logger.info(f"Set judge_model to: {project.provider_id}")
+            if "prompt_template" in judge_config:
+                judge_config["prompt_template"] = request.eval_config.get("judge_prompt", judge_config["prompt_template"])
+                logger.info(f"Set prompt_template to: {judge_config['prompt_template'][:100]}...")
+        
+        logger.info(f"Final scoring_params: {scoring_params}")
+        
+        # Run scoring through LlamaStack
+        try:
+            logger.info("Sending scoring request to LlamaStack...")
+            logger.info(f"Input rows for scoring: {eval_rows}")
+            logger.info(f"Scoring functions: {scoring_params}")
+            
+            scoring_response = lls_client.scoring.score(
+                input_rows=eval_rows,
+                scoring_functions=scoring_params
+            )
+            logger.info("Received scoring response from LlamaStack")
+            logger.info(f"Scoring response type: {type(scoring_response)}")
+            logger.info(f"Scoring response: {scoring_response}")
+            
+            # Log detailed response structure
+            if hasattr(scoring_response, 'results'):
+                logger.info(f"Scoring response results keys: {list(scoring_response.results.keys())}")
+                for func_name, result in scoring_response.results.items():
+                    logger.info(f"Function {func_name}:")
+                    logger.info(f"  Result type: {type(result)}")
+                    logger.info(f"  Result attributes: {dir(result)}")
+                    if hasattr(result, 'score_rows'):
+                        logger.info(f"  Score rows: {result.score_rows}")
+                        if result.score_rows:
+                            logger.info(f"  First score row: {result.score_rows[0]}")
+                            logger.info(f"  First score row keys: {list(result.score_rows[0].keys())}")
+                    if hasattr(result, 'aggregated_results'):
+                        logger.info(f"  Aggregated results: {result.aggregated_results}")
+            else:
+                logger.info("No results attribute found in scoring response")
+            
+            # Process results from all scoring functions
+            results = []
+            total_score = 0
+            scored_count = 0
+            all_scoring_results = {}
+            
+            logger.info(f"Processing {len(scoring_response.results)} scoring functions")
+            
+            # Process all scoring functions
+            if scoring_response.results:
+                # First, collect all scoring results for each test
+                for scoring_function_name, result in scoring_response.results.items():
+                    logger.info(f"Processing scoring function: {scoring_function_name}")
+                    all_scoring_results[scoring_function_name] = {
+                        "aggregated_results": getattr(result, 'aggregated_results', None),
+                        "score_rows": getattr(result, 'score_rows', [])
+                    }
+                
+                # Create results by combining all scoring functions per test
+                for i, eval_row in enumerate(eval_rows):
+                    test_scoring_results = {}
+                    primary_score = None
+                    
+                    # Collect results from all scoring functions for this test
+                    for scoring_function_name, result in scoring_response.results.items():
+                        if hasattr(result, 'score_rows') and result.score_rows and i < len(result.score_rows):
+                            score_row = result.score_rows[i]
+                            test_scoring_results[scoring_function_name] = {
+                                "score": score_row.get('score', 'Unknown'),
+                                "explanation": score_row.get('explanation', ''),
+                                "judge_feedback": score_row.get('judge_feedback', ''),
+                                "raw_data": score_row  # Include all raw data
+                            }
+                            
+                            # Use the first scoring function's score as primary for averaging
+                            if primary_score is None:
+                                primary_score = score_row.get('score', 'Unknown')
+                    
+                    # Try to extract numeric score for averaging (using primary score)
+                    if primary_score is not None:
+                        try:
+                            if isinstance(primary_score, str) and primary_score in ['A', 'B', 'C', 'D', 'E']:
+                                # Convert A-E to numeric score
+                                numeric_score = {'A': 1, 'B': 0.75, 'C': 0.5, 'D': 0.25, 'E': 0}[primary_score]
+                                total_score += numeric_score
+                                scored_count += 1
+                            elif isinstance(primary_score, (int, float)):
+                                total_score += float(primary_score)
+                                scored_count += 1
+                        except:
+                            pass
+                    
+                    results.append(EvalTestResult(
+                        input_query=eval_row["input_query"],
+                        generated_answer=eval_row["generated_answer"],
+                        expected_answer=eval_row["expected_answer"],
+                        scoring_results=test_scoring_results
+                    ))
+                
+                # Calculate average score
+                avg_score = total_score / scored_count if scored_count > 0 else None
+                
+                # Get summary from aggregated results if available (combine all functions)
+                summary = {}
+                for scoring_function_name, result in scoring_response.results.items():
+                    if hasattr(result, 'aggregated_results') and result.aggregated_results:
+                        summary[scoring_function_name] = result.aggregated_results
+                
+                logger.info(f"Processed {len(results)} test results with {len(all_scoring_results)} scoring functions")
+                
+                return EvalResponse(
+                    results=results,
+                    summary=summary if summary else None,
+                    total_tests=len(eval_rows),
+                    avg_score=avg_score,
+                    status="completed",
+                    scoring_functions=all_scoring_results
+                )
+            else:
+                return EvalResponse(
+                    results=[],
+                    summary=None,
+                    total_tests=0,
+                    avg_score=None,
+                    status="failed"
+                )
+                
+        except Exception as e:
+            logger.error(f"LlamaStack scoring error: {str(e)}")
+            logger.error(f"Error type: {type(e)}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            
+            # Check for specific LlamaStack scoring endpoint not available error
+            if isinstance(e, LlamaStackNotFoundError) or ("NotFoundError" in str(type(e)) and "404" in str(e)):
+                raise HTTPException(
+                    status_code=400, 
+                    detail="LlamaStack scoring endpoint not available. The scoring service is not enabled on your LlamaStack server. Please enable the scoring service or use a different LlamaStack server that supports evaluation."
+                )
+            
+            raise HTTPException(status_code=500, detail=f"LlamaStack scoring error: {str(e)}")
+    
+    except Exception as e:
+        logger.error(f"General evaluation error: {str(e)}")
+        logger.error(f"Error type: {type(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Evaluation error: {str(e)}")
 
 
 @app.get("/api/debug/projects", tags=["Debug"])
