@@ -1,12 +1,26 @@
 import axios from 'axios';
 import { Project, PromptHistory, BackendTestHistory, GitUser, PendingPR } from './types';
 
-const API_BASE = `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/api`;
+// Runtime API base URL detection
+const getApiBase = (): string => {
+  // Use environment variable if set, otherwise detect environment at runtime
+  if (import.meta.env.VITE_BACKEND_URL) {
+    return `${import.meta.env.VITE_BACKEND_URL}/api`;
+  }
+  
+  // Check hostname at runtime
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'http://localhost:3001/api';
+  }
+  
+  // Use relative path for production deployment
+  return '/api';
+};
 
 export const api = {
   // Projects
   getProjects: async (): Promise<Project[]> => {
-    const response = await axios.get(`${API_BASE}/projects`);
+    const response = await axios.get(`${getApiBase()}/projects`);
     return response.data;
   },
 
@@ -18,12 +32,12 @@ export const api = {
     gitRepoUrl?: string;
     testBackendUrl?: string;
   }): Promise<Project> => {
-    const response = await axios.post(`${API_BASE}/projects`, data);
+    const response = await axios.post(`${getApiBase()}/projects`, data);
     return response.data;
   },
 
   getProject: async (id: number): Promise<Project> => {
-    const response = await axios.get(`${API_BASE}/projects/${id}`);
+    const response = await axios.get(`${getApiBase()}/projects/${id}`);
     return response.data;
   },
 
@@ -38,17 +52,17 @@ export const api = {
       testBackendUrl?: string;
     }
   ): Promise<Project> => {
-    const response = await axios.put(`${API_BASE}/projects/${id}`, data);
+    const response = await axios.put(`${getApiBase()}/projects/${id}`, data);
     return response.data;
   },
 
   deleteProject: async (id: number): Promise<void> => {
-    await axios.delete(`${API_BASE}/projects/${id}`);
+    await axios.delete(`${getApiBase()}/projects/${id}`);
   },
 
   // Prompt History
   getPromptHistory: async (projectId: number): Promise<PromptHistory[]> => {
-    const response = await axios.get(`${API_BASE}/projects/${projectId}/history`);
+    const response = await axios.get(`${getApiBase()}/projects/${projectId}/history`);
     return response.data;
   },
 
@@ -65,7 +79,7 @@ export const api = {
       response?: string;
     }
   ): Promise<PromptHistory> => {
-    const response = await axios.post(`${API_BASE}/projects/${projectId}/history`, data);
+    const response = await axios.post(`${getApiBase()}/projects/${projectId}/history`, data);
     return response.data;
   },
 
@@ -78,7 +92,7 @@ export const api = {
       is_prod?: boolean;
     }
   ): Promise<PromptHistory> => {
-    const response = await axios.put(`${API_BASE}/projects/${projectId}/history/${historyId}`, data);
+    const response = await axios.put(`${getApiBase()}/projects/${projectId}/history/${historyId}`, data);
     return response.data;
   },
 
@@ -99,7 +113,7 @@ export const api = {
     onComplete: () => void
   ): Promise<void> => {
     try {
-      const response = await fetch(`${API_BASE}/projects/${projectId}/generate`, {
+      const response = await fetch(`${getApiBase()}/projects/${projectId}/generate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -164,13 +178,13 @@ export const api = {
     access_token: string;
     server_url?: string;
   }): Promise<GitUser> => {
-    const response = await axios.post(`${API_BASE}/git/auth`, data);
+    const response = await axios.post(`${getApiBase()}/git/auth`, data);
     return response.data;
   },
 
   getCurrentGitUser: async (): Promise<GitUser | null> => {
     try {
-      const response = await axios.get(`${API_BASE}/git/user`);
+      const response = await axios.get(`${getApiBase()}/git/user`);
       return response.data;
     } catch (error) {
       // Return null if no user is authenticated (404 is expected)
@@ -189,12 +203,12 @@ export const api = {
     last_used?: string;
     error?: string;
   }> => {
-    const response = await axios.get(`${API_BASE}/git/auth-status`);
+    const response = await axios.get(`${getApiBase()}/git/auth-status`);
     return response.data;
   },
 
   testGitRepoAccess: async (projectId: number): Promise<void> => {
-    await axios.post(`${API_BASE}/projects/${projectId}/git/test-access`);
+    await axios.post(`${getApiBase()}/projects/${projectId}/git/test-access`);
   },
 
   // Git operations
@@ -203,33 +217,33 @@ export const api = {
     pr_url: string;
     pr_number: number;
   }> => {
-    const response = await axios.post(`${API_BASE}/projects/${projectId}/history/${historyId}/tag-prod`);
+    const response = await axios.post(`${getApiBase()}/projects/${projectId}/history/${historyId}/tag-prod`);
     return response.data;
   },
 
   getPendingPRs: async (projectId: number): Promise<PendingPR[]> => {
-    const response = await axios.get(`${API_BASE}/projects/${projectId}/pending-prs`);
+    const response = await axios.get(`${getApiBase()}/projects/${projectId}/pending-prs`);
     return response.data;
   },
 
   getProdHistoryFromGit: async (projectId: number): Promise<PromptHistory[]> => {
-    const response = await axios.get(`${API_BASE}/projects/${projectId}/prod-history`);
+    const response = await axios.get(`${getApiBase()}/projects/${projectId}/prod-history`);
     return response.data;
   },
 
   getGitHistory: async (projectId: number): Promise<any[]> => {
-    const response = await axios.get(`${API_BASE}/projects/${projectId}/git-history`);
+    const response = await axios.get(`${getApiBase()}/projects/${projectId}/git-history`);
     return response.data;
   },
 
   syncPRStatus: async (projectId: number): Promise<{ message: string }> => {
-    const response = await axios.post(`${API_BASE}/projects/${projectId}/sync-prs`);
+    const response = await axios.post(`${getApiBase()}/projects/${projectId}/sync-prs`);
     return response.data;
   },
 
   // Backend test history
   getBackendTestHistory: async (projectId: number): Promise<BackendTestHistory[]> => {
-    const response = await axios.get(`${API_BASE}/projects/${projectId}/backend-history`);
+    const response = await axios.get(`${getApiBase()}/projects/${projectId}/backend-history`);
     return response.data;
   },
 
@@ -243,7 +257,7 @@ export const api = {
       notes?: string;
     }
   ): Promise<BackendTestHistory> => {
-    const response = await axios.put(`${API_BASE}/projects/${projectId}/backend-history/${historyId}`, data);
+    const response = await axios.put(`${getApiBase()}/projects/${projectId}/backend-history/${historyId}`, data);
     return response.data;
   },
 
@@ -264,7 +278,7 @@ export const api = {
     onComplete: () => void
   ): Promise<void> => {
     try {
-      const response = await fetch(`${API_BASE}/projects/${projectId}/test-backend`, {
+      const response = await fetch(`${getApiBase()}/projects/${projectId}/test-backend`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -364,7 +378,7 @@ export const api = {
     topP?: number;
     topK?: number;
   }> => {
-    const response = await axios.get(`${API_BASE}/projects/${projectId}/test-settings`);
+    const response = await axios.get(`${getApiBase()}/projects/${projectId}/test-settings`);
     return response.data;
   },
 
@@ -384,7 +398,7 @@ export const api = {
     commit_sha?: string;
     commit_url?: string;
   }> => {
-    const response = await axios.post(`${API_BASE}/projects/${projectId}/test-settings`, settings);
+    const response = await axios.post(`${getApiBase()}/projects/${projectId}/test-settings`, settings);
     return response.data;
   },
 
@@ -394,7 +408,7 @@ export const api = {
     commit_sha?: string;
     commit_url?: string;
   }> => {
-    const response = await axios.post(`${API_BASE}/projects/${projectId}/backend-history/${historyId}/tag-test`);
+    const response = await axios.post(`${getApiBase()}/projects/${projectId}/backend-history/${historyId}/tag-test`);
     return response.data;
   },
 
@@ -404,7 +418,7 @@ export const api = {
     pr_url: string;
     pr_number: number;
   }> => {
-    const response = await axios.post(`${API_BASE}/projects/${projectId}/backend-history/${historyId}/tag-prod`);
+    const response = await axios.post(`${getApiBase()}/projects/${projectId}/backend-history/${historyId}/tag-prod`);
     return response.data;
   },
 
@@ -414,7 +428,7 @@ export const api = {
     commit_sha?: string;
     commit_url?: string;
   }> => {
-    const response = await axios.post(`${API_BASE}/projects/${projectId}/history/${historyId}/tag-test`);
+    const response = await axios.post(`${getApiBase()}/projects/${projectId}/history/${historyId}/tag-test`);
     return response.data;
   },
 };

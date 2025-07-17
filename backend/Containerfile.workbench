@@ -18,19 +18,26 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Create data directory for SQLite database
-RUN mkdir -p /app/data
+# Create data directory for SQLite database (persistent volume mount point)
+RUN mkdir -p /opt/app-root/src && \
+    chown -R 1001:0 /app && \
+    chmod -R g+w /app && \
+    chown -R 1001:0 /opt/app-root && \
+    chmod -R g+w /opt/app-root
 
 # Expose port
 EXPOSE 3001
 
 # Environment variables
 ENV PYTHONPATH=/app
-ENV DATABASE_URL=sqlite:///data/grimoire.db
+ENV DATABASE_URL=sqlite:////opt/app-root/src/grimoire.db
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD python -c "import requests; requests.get('http://localhost:3001/')" || exit 1
+  CMD python -c "import requests; requests.get('http://localhost:3001/api')" || exit 1
+
+# Switch to non-root user
+USER 1001
 
 # Run the application
 CMD ["python", "main.py"]

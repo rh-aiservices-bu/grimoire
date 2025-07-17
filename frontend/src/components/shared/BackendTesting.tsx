@@ -202,7 +202,7 @@ EXPECTED_RESPONSE: {expected_answer}`
         },
         () => {
           setIsLoading(false);
-          setSuccess('Backend test completed successfully! Response saved to backend test history.');
+          setSuccess('Backend test completed successfully!');
           // Note: We don't call onTestComplete here to avoid creating Development/Git History cards
           // Backend tests are saved to a separate BackendTestHistory table
         }
