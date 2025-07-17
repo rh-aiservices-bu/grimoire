@@ -22,6 +22,7 @@ import {
   TabTitleText,
   Modal,
   ModalVariant,
+  Badge,
 } from '@patternfly/react-core';
 import { Project, ModelParameters } from '../../types';
 import { api } from '../../api';
@@ -41,6 +42,13 @@ export const BackendTesting: React.FC<BackendTestingProps> = ({ project }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  
+  // Eval state
+  const [dataset, setDataset] = useState('huggingface://datasets/llamastack/simpleqa?split=train');
+  const [evalConfig, setEvalConfig] = useState('');
+  const [evalResults, setEvalResults] = useState<any>(null);
+  const [isEvalRunning, setIsEvalRunning] = useState(false);
+  const [evalError, setEvalError] = useState<string | null>(null);
   
   // Settings state (for modal)
   const [userPromptModal, setUserPromptModal] = useState('');
@@ -88,6 +96,47 @@ export const BackendTesting: React.FC<BackendTestingProps> = ({ project }) => {
       checkAuthStatus();
     }
   }, [project.id, project.git_repo_url]);
+
+  // Initialize eval config
+  useEffect(() => {
+    if (!evalConfig) {
+      const defaultEvalConfig = {
+        scoring_params: {
+          "llm-as-judge::base": {
+            "judge_model": project.provider_id,
+            "prompt_template": "{{judge_prompt}}",
+            "type": "llm_as_judge",
+            "judge_score_regexes": ["Answer: (A|B|C|D|E)"]
+          },
+          "basic::subset_of": null
+        },
+        tests: [
+          {
+            prompt: "Sample test",
+            expected_result: "sample test"
+          }
+        ],
+        judge_prompt: `Given a QUESTION and GENERATED_RESPONSE and EXPECTED_RESPONSE.
+
+Compare the factual content of the GENERATED_RESPONSE with the EXPECTED_RESPONSE. Ignore any differences in style, grammar, or punctuation.
+  The GENERATED_RESPONSE may either be a subset or superset of the EXPECTED_RESPONSE, or it may conflict with it. Determine which case applies. Answer the question by selecting one of the following options:
+  (A) The GENERATED_RESPONSE is a subset of the EXPECTED_RESPONSE and is fully consistent with it.
+  (B) The GENERATED_RESPONSE is a superset of the EXPECTED_RESPONSE and is fully consistent with it.
+  (C) The GENERATED_RESPONSE contains all the same details as the EXPECTED_RESPONSE.
+  (D) There is a disagreement between the GENERATED_RESPONSE and the EXPECTED_RESPONSE.
+  (E) The answers differ, but these differences don't matter from the perspective of factuality.
+
+Give your answer in the format "Answer: One of ABCDE, Explanation: ".
+
+Your actual task:
+
+QUESTION: {input_query}
+GENERATED_RESPONSE: {generated_answer}
+EXPECTED_RESPONSE: {expected_answer}`
+      };
+      setEvalConfig(JSON.stringify(defaultEvalConfig, null, 2));
+    }
+  }, [project.provider_id, evalConfig]);
 
   const parseVariables = (input: string): Record<string, string> => {
     const vars: Record<string, string> = {};
@@ -168,6 +217,60 @@ export const BackendTesting: React.FC<BackendTestingProps> = ({ project }) => {
     setResponse('');
     setError(null);
     setSuccess(null);
+  };
+
+  const handleRunEval = async () => {
+    if (!dataset.trim()) {
+      setEvalError('Please enter a dataset');
+      return;
+    }
+
+    if (!evalConfig.trim()) {
+      setEvalError('Please enter eval configuration');
+      return;
+    }
+
+    if (!project.test_backend_url) {
+      setEvalError('No test backend URL configured for this project');
+      return;
+    }
+
+    setIsEvalRunning(true);
+    setEvalError(null);
+    setEvalResults(null);
+
+    try {
+      let parsedEvalConfig;
+      try {
+        parsedEvalConfig = JSON.parse(evalConfig);
+      } catch (err) {
+        setEvalError('Invalid JSON in eval configuration');
+        setIsEvalRunning(false);
+        return;
+      }
+
+      const evalRequest = {
+        dataset: dataset,
+        eval_config: parsedEvalConfig,
+        backend_url: project.test_backend_url,
+        user_prompt: userPromptModal || 'Tell me about {{topic}}',
+        system_prompt: systemPrompt || 'You are a helpful assistant',
+        variables: variables,
+        temperature: modelParams.temperature,
+        max_len: modelParams.max_len,
+        top_p: modelParams.top_p,
+        top_k: modelParams.top_k
+      };
+
+      console.log('Sending eval request:', evalRequest);
+
+      const response = await api.runEvaluation(project.id, evalRequest);
+      setEvalResults(response);
+    } catch (err) {
+      setEvalError(err instanceof Error ? err.message : 'Unknown error occurred');
+    } finally {
+      setIsEvalRunning(false);
+    }
   };
 
   const checkAuthStatus = async () => {
@@ -467,9 +570,268 @@ export const BackendTesting: React.FC<BackendTestingProps> = ({ project }) => {
           </Tab>
           
           <Tab eventKey="eval" title={<TabTitleText>Eval</TabTitleText>}>
-            <div style={{ padding: '2rem', textAlign: 'center', color: '#6a6e73' }}>
-              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔧</div>
-              <div>Evaluation features coming soon...</div>
+            <div style={{ padding: '2rem' }}>
+              <Grid hasGutter>
+                <GridItem span={6}>
+                  <Card>
+                    <CardTitle>Dataset</CardTitle>
+                    <CardBody>
+                      <Form>
+                        <FormGroup label="Dataset URL" isRequired>
+                          <TextArea
+                            value={dataset}
+                            onChange={(_, value) => setDataset(value)}
+                            placeholder="huggingface://datasets/llamastack/simpleqa?split=train"
+                            rows={1}
+                            style={{ 
+                              fontFamily: 'Monaco, Consolas, "Courier New", monospace',
+                              fontSize: '0.9rem',
+                              resize: 'none'
+                            }}
+                          />
+                        </FormGroup>
+                      </Form>
+                    </CardBody>
+                  </Card>
+                  
+                  <Card style={{ marginTop: '1rem' }}>
+                    <CardTitle>Llamastack eval config</CardTitle>
+                    <CardBody>
+                      <Form>
+                        <FormGroup>
+                          <TextArea
+                            value={evalConfig}
+                            onChange={(_, value) => setEvalConfig(value)}
+                            placeholder="Enter eval configuration in JSON format"
+                            rows={20}
+                            style={{ 
+                              fontFamily: 'Monaco, Consolas, "Courier New", monospace',
+                              fontSize: '0.9rem'
+                            }}
+                          />
+                        </FormGroup>
+                      </Form>
+                    </CardBody>
+                  </Card>
+                  
+                  <div style={{ marginTop: '1rem' }}>
+                    <Button 
+                      variant="primary" 
+                      onClick={handleRunEval}
+                      isLoading={isEvalRunning}
+                      isDisabled={isEvalRunning}
+                    >
+                      {isEvalRunning ? 'Running Eval...' : 'Run eval'}
+                    </Button>
+                  </div>
+                  
+                  {evalError && (
+                    <Alert variant="danger" title="Error" className="pf-u-mt-md">
+                      <div>{evalError}</div>
+                      {evalError.includes("scoring endpoint not available") && (
+                        <div style={{ marginTop: '1rem' }}>
+                          <strong>How to fix:</strong>
+                          <ul style={{ marginTop: '0.5rem', paddingLeft: '1.5rem' }}>
+                            <li>Enable the scoring service in your LlamaStack server configuration</li>
+                            <li>Or use a different LlamaStack server that supports evaluation</li>
+                            <li>Check the LlamaStack documentation for scoring service setup</li>
+                          </ul>
+                        </div>
+                      )}
+                    </Alert>
+                  )}
+                </GridItem>
+                
+                <GridItem span={6}>
+                  <Card>
+                    <CardTitle>Eval results</CardTitle>
+                    <CardBody>
+                      {isEvalRunning ? (
+                        <div style={{ textAlign: 'center', padding: '2rem' }}>
+                          <Spinner size="lg" />
+                          <div style={{ marginTop: '1rem' }}>Running evaluation...</div>
+                        </div>
+                      ) : evalResults ? (
+                        <div>
+                          <div style={{ marginBottom: '1rem' }}>
+                            <strong>Summary:</strong>
+                            {evalResults.status === 'failed' ? (
+                              <div style={{ color: 'var(--pf-global--danger-color--100)' }}>Evaluation failed</div>
+                            ) : (
+                              <>
+                                <div>Total tests: {evalResults.total_tests}</div>
+                                {evalResults.avg_score !== null && evalResults.avg_score !== undefined && (
+                                  <div>Average score: {evalResults.avg_score.toFixed(2)}</div>
+                                )}
+                              </>
+                            )}
+                            <div>Status: {evalResults.status}</div>
+                          </div>
+                          
+                          <div style={{ marginBottom: '1rem' }}>
+                            <strong>Detailed Results:</strong>
+                          </div>
+                          
+                          <div style={{ maxHeight: '700px', overflowY: 'auto' }}>
+                            {evalResults.results.length > 0 && evalResults.results[0].scoring_results && (
+                              Object.entries(evalResults.results[0].scoring_results).map(([funcName, _]: [string, any]) => (
+                                <Card key={funcName} style={{ marginBottom: '1.5rem' }}>
+                                  <CardTitle>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                      <Badge variant="secondary">{funcName}</Badge>
+                                      {evalResults.summary && evalResults.summary[funcName] && (
+                                        <div style={{ fontSize: '0.9rem', color: '#6c757d' }}>
+                                          {Object.entries(evalResults.summary[funcName]).map(([key, value]) => (
+                                            <span key={key} style={{ marginRight: '1rem' }}>
+                                              {key}: {JSON.stringify(value)}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </CardTitle>
+                                  <CardBody>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                      {evalResults.results.map((result: any, index: number) => (
+                                        <Card key={index} isCompact style={{ border: '1px solid var(--pf-global--BorderColor--200)' }}>
+                                          <CardBody>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                                <Badge variant="filled" style={{ fontSize: '0.875rem', fontWeight: 'bold' }}>Test {index + 1}</Badge>
+                                                <Badge variant="outline" style={{ fontSize: '0.875rem' }}>
+                                                  Score: {result.scoring_results && result.scoring_results[funcName] 
+                                                    ? result.scoring_results[funcName].score 
+                                                    : 'N/A'}
+                                                </Badge>
+                                              </div>
+                                            </div>
+                                            
+                                            <Grid hasGutter>
+                                              <GridItem span={4}>
+                                                <div style={{ 
+                                                  padding: '0.75rem',
+                                                  backgroundColor: 'var(--pf-global--palette--blue-50)',
+                                                  borderRadius: '4px',
+                                                  border: '1px solid var(--pf-global--palette--blue-200)'
+                                                }}>
+                                                  <div style={{ 
+                                                    fontWeight: 'bold', 
+                                                    fontSize: '0.875rem', 
+                                                    marginBottom: '0.5rem',
+                                                    color: 'var(--pf-global--palette--blue-700)'
+                                                  }}>
+                                                    Input
+                                                  </div>
+                                                  <div style={{ 
+                                                    fontSize: '0.875rem',
+                                                    lineHeight: '1.4',
+                                                    whiteSpace: 'pre-wrap',
+                                                    wordWrap: 'break-word'
+                                                  }}>
+                                                    {result.input_query}
+                                                  </div>
+                                                </div>
+                                              </GridItem>
+                                              
+                                              <GridItem span={4}>
+                                                <div style={{ 
+                                                  padding: '0.75rem',
+                                                  backgroundColor: 'var(--pf-global--palette--green-50)',
+                                                  borderRadius: '4px',
+                                                  border: '1px solid var(--pf-global--palette--green-200)'
+                                                }}>
+                                                  <div style={{ 
+                                                    fontWeight: 'bold', 
+                                                    fontSize: '0.875rem', 
+                                                    marginBottom: '0.5rem',
+                                                    color: 'var(--pf-global--palette--green-700)'
+                                                  }}>
+                                                    Generated
+                                                  </div>
+                                                  <div style={{ 
+                                                    fontSize: '0.875rem',
+                                                    lineHeight: '1.4',
+                                                    whiteSpace: 'pre-wrap',
+                                                    wordWrap: 'break-word'
+                                                  }}>
+                                                    {result.generated_answer}
+                                                  </div>
+                                                </div>
+                                              </GridItem>
+                                              
+                                              <GridItem span={4}>
+                                                <div style={{ 
+                                                  padding: '0.75rem',
+                                                  backgroundColor: 'var(--pf-global--palette--orange-50)',
+                                                  borderRadius: '4px',
+                                                  border: '1px solid var(--pf-global--palette--orange-200)'
+                                                }}>
+                                                  <div style={{ 
+                                                    fontWeight: 'bold', 
+                                                    fontSize: '0.875rem', 
+                                                    marginBottom: '0.5rem',
+                                                    color: 'var(--pf-global--palette--orange-700)'
+                                                  }}>
+                                                    Expected
+                                                  </div>
+                                                  <div style={{ 
+                                                    fontSize: '0.875rem',
+                                                    lineHeight: '1.4',
+                                                    whiteSpace: 'pre-wrap',
+                                                    wordWrap: 'break-word'
+                                                  }}>
+                                                    {result.expected_answer}
+                                                  </div>
+                                                </div>
+                                              </GridItem>
+                                            </Grid>
+                                            
+                                            {funcName === 'llm-as-judge::base' && result.scoring_results && result.scoring_results[funcName] && (
+                                              <div style={{ 
+                                                marginTop: '1rem',
+                                                padding: '0.75rem',
+                                                backgroundColor: 'var(--pf-global--palette--purple-50)',
+                                                borderRadius: '4px',
+                                                border: '1px solid var(--pf-global--palette--purple-200)'
+                                              }}>
+                                                <div style={{ 
+                                                  fontWeight: 'bold', 
+                                                  fontSize: '0.875rem', 
+                                                  marginBottom: '0.5rem',
+                                                  color: 'var(--pf-global--palette--purple-700)'
+                                                }}>
+                                                  Judge Feedback
+                                                </div>
+                                                <div style={{ 
+                                                  fontSize: '0.875rem',
+                                                  lineHeight: '1.4',
+                                                  whiteSpace: 'pre-wrap',
+                                                  wordWrap: 'break-word'
+                                                }}>
+                                                  {result.scoring_results[funcName].judge_feedback || result.scoring_results[funcName].explanation || 'No feedback'}
+                                                </div>
+                                              </div>
+                                            )}
+                                          </CardBody>
+                                        </Card>
+                                      ))}
+                                    </div>
+                                  </CardBody>
+                                </Card>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ textAlign: 'center', padding: '2rem', color: '#6a6e73' }}>
+                          <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>📊</div>
+                          <div>Run an evaluation to see results here</div>
+                        </div>
+                      )}
+                    </CardBody>
+                  </Card>
+                </GridItem>
+              </Grid>
             </div>
           </Tab>
         </Tabs>

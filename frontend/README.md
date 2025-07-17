@@ -1,4 +1,4 @@
-# Prompt Experimentation Tool - Frontend
+# Grimoire - Prompt Experimentation Tool - Frontend
 
 A React-based frontend application built with TypeScript, Vite, and PatternFly for experimenting with prompts using Llama Stack models.
 
@@ -31,6 +31,7 @@ A React-based frontend application built with TypeScript, Vite, and PatternFly f
 - **GitAuthModal**: Git platform authentication
 - **NotesModal**: Add detailed notes to prompts
 - **ApiDocumentationModal**: Interactive API documentation
+- **Branded Header**: Features the Grimoire logo and consistent application branding
 
 ### Advanced Features
 - **Streaming Responses**: Real-time display of model outputs
@@ -92,6 +93,7 @@ frontend/
 │   ├── index.css           # Base styles
 │   └── main.tsx            # Application entry point
 ├── public/                 # Static assets
+│   ├── grimoire-logo.png   # Application logo
 ├── package.json           # Dependencies and scripts
 ├── tsconfig.json          # TypeScript configuration
 ├── vite.config.ts         # Vite configuration

@@ -1,4 +1,4 @@
-# Prompt Experimentation Tool API Documentation
+# Grimoire - Prompt Experimentation Tool API Documentation
 
 ## 🌐 Interactive Documentation
 
