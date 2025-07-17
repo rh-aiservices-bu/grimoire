@@ -1,9 +1,10 @@
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from models import Base
 
-# SQLite database URL
-SQLALCHEMY_DATABASE_URL = "sqlite:///./grimoire.db"
+# SQLite database URL - use environment variable or default
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./grimoire.db")
 
 # Create engine
 engine = create_engine(

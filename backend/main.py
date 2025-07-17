@@ -69,11 +69,17 @@ app = FastAPI(
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=["*"],  # Allow all origins for OpenShift deployment
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Health check endpoint for OpenShift probes
+@app.get("/api", tags=["Health"])
+async def health_check():
+    """Health check endpoint for OpenShift readiness and liveness probes"""
+    return {"status": "healthy", "message": "200"}
 
 # Initialize Git Service
 git_service = GitService()

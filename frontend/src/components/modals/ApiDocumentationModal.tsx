@@ -33,12 +33,24 @@ export const ApiDocumentationModal: React.FC<ApiDocumentationModalProps> = ({
   isOpen,
   onClose,
 }) => {
-  const [baseUrl, setBaseUrl] = useState('http://localhost:3001');
+  const [baseUrl, setBaseUrl] = useState('');
 
   useEffect(() => {
-    // Use environment variable or fallback to localhost
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
-    setBaseUrl(backendUrl);
+    // Runtime detection for API documentation
+    const getBackendUrl = () => {
+      if (import.meta.env.VITE_BACKEND_URL) {
+        return import.meta.env.VITE_BACKEND_URL;
+      }
+      
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return 'http://localhost:3001';
+      }
+      
+      // Use current origin for production
+      return window.location.origin;
+    };
+    
+    setBaseUrl(getBackendUrl());
   }, []);
 
   const copyToClipboard = (text: string) => {

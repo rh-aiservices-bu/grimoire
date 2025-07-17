@@ -107,7 +107,7 @@ const AppContext = createContext<{
       providerId: string;
       gitRepoUrl?: string;
     }) => Promise<void>;
-    selectProject: (project: Project) => void;
+    selectProject: (project: Project | null) => void;
     updateProject: (project: Project) => void;
     deleteProject: (projectId: number) => void;
     addNotification: (notification: Omit<Notification, 'id'>) => void;
@@ -173,7 +173,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     },
 
-    selectProject: (project: Project) => {
+    selectProject: (project: Project | null) => {
       dispatch({ type: 'SET_SELECTED_PROJECT', payload: project });
     },
 
