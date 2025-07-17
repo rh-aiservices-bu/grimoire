@@ -364,7 +364,7 @@ export const api = {
     status: string;
     scoring_functions?: Record<string, any>;
   }> => {
-    const response = await axios.post(`${API_BASE}/projects/${projectId}/eval`, data);
+    const response = await axios.post(`${getApiBase()}/projects/${projectId}/eval`, data);
     return response.data;
   },
 
