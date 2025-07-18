@@ -55,13 +55,13 @@ curl http://localhost:3001/api/projects-models
 {
   "projects": [
     {
-      "name": "newsummary",
-      "provider_id": "llama32-full",
+      "name": "document-summarizer",
+      "provider_id": "llama-3.1-8b-instruct",
       "llamastack_url": "http://llama-stack-server.example.com"
     },
     {
-      "name": "newone", 
-      "provider_id": "llama-3.2-3b",
+      "name": "code-assistant", 
+      "provider_id": "llama-3.1-70b-instruct",
       "llamastack_url": "http://llama-stack-server.example.com"
     }
   ]
@@ -70,20 +70,20 @@ curl http://localhost:3001/api/projects-models
 
 ### 3. Get Latest Prompt Configuration
 ```bash
-curl http://localhost:3001/prompt/newsummary/llama32-full
+curl http://localhost:3001/prompt/document-summarizer/llama-3.1-8b-instruct
 ```
 
 **Response Example:**
 ```json
 {
-  "userPrompt": "Summarize this article: {{content}}",
-  "systemPrompt": "You are a helpful news summarizer",
+  "userPrompt": "Summarize this document: {{content}}",
+  "systemPrompt": "You are a helpful document summarizer",
   "temperature": 0.7,
   "maxLen": 1000,
   "topP": 0.9,
   "topK": 50,
   "variables": {
-    "content": "Article text here..."
+    "content": "Document text here..."
   },
   "is_prod": false
 }
@@ -91,20 +91,20 @@ curl http://localhost:3001/prompt/newsummary/llama32-full
 
 ### 4. Get Production Prompt Configuration
 ```bash
-curl http://localhost:3001/prompt/newsummary/llama32-full/prod
+curl http://localhost:3001/prompt/document-summarizer/llama-3.1-8b-instruct/prod
 ```
 
 **Response Example:**
 ```json
 {
-  "userPrompt": "Summarize this article: {{content}}",
-  "systemPrompt": "You are a production-ready news summarizer",
+  "userPrompt": "Summarize this document: {{content}}",
+  "systemPrompt": "You are a production-ready document summarizer",
   "temperature": 0.6,
   "maxLen": 800,
   "topP": 0.85,
   "topK": 40,
   "variables": {
-    "content": "Article text here..."
+    "content": "Document text here..."
   },
   "is_prod": true
 }
@@ -116,9 +116,9 @@ curl -X POST http://localhost:3001/api/projects/1/test-backend \
   -H "Content-Type: application/json" \
   -d '{
     "test_backend_url": "http://localhost:8000",
-    "user_prompt": "Tell me about {{topic}}",
-    "system_prompt": "You are a helpful assistant",
-    "variables": {"topic": "machine learning"},
+    "user_prompt": "Help me with {{task}}",
+    "system_prompt": "You are a helpful coding assistant",
+    "variables": {"task": "Python debugging"},
     "temperature": 0.7,
     "max_len": 500,
     "top_p": 0.9,
@@ -135,9 +135,9 @@ curl http://localhost:3001/api/projects/1/test-settings
 ```json
 {
   "test_backend_url": "http://localhost:8000",
-  "user_prompt": "Tell me about {{topic}}",
-  "system_prompt": "You are a helpful assistant",
-  "variables": {"topic": "machine learning"},
+  "user_prompt": "Help me with {{task}}",
+  "system_prompt": "You are a helpful coding assistant",
+  "variables": {"task": "Python debugging"},
   "temperature": 0.7,
   "max_len": 500,
   "top_p": 0.9,
@@ -221,21 +221,23 @@ The API supports dynamic prompt templates using `{{variable_name}}` syntax:
 
 **Template Example:**
 ```
-Hello {{name}}, you are {{age}} years old and live in {{city}}.
+Help me debug this {{language}} code: {{code}}
 ```
 
 **Variables:**
 ```json
 {
-  "name": "Alice",
-  "age": "25", 
-  "city": "New York"
+  "language": "Python",
+  "code": "def factorial(n):\n    if n == 0:\n        return 1\n    return n * factorial(n-1)"
 }
 ```
 
 **Result:**
 ```
-Hello Alice, you are 25 years old and live in New York.
+Help me debug this Python code: def factorial(n):
+    if n == 0:
+        return 1
+    return n * factorial(n-1)
 ```
 
 ## 🛠️ Development
@@ -346,9 +348,9 @@ if (projects.length > 0) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             test_backend_url: 'http://localhost:8000',
-            user_prompt: 'Tell me about {{topic}}',
-            system_prompt: 'You are a helpful assistant',
-            variables: { topic: 'AI' },
+            user_prompt: 'Help me with {{task}}',
+            system_prompt: 'You are a helpful coding assistant',
+            variables: { task: 'JavaScript debugging' },
             temperature: 0.7,
             max_len: 500,
             top_p: 0.9,

@@ -152,8 +152,8 @@ export const ApiDocumentationModal: React.FC<ApiDocumentationModalProps> = ({
 {`{
   "projects": [
     {
-      "name": "newsummary",
-      "provider_id": "llama32-full",
+      "name": "document-summarizer",
+      "provider_id": "llama-3.1-8b-instruct",
       "llamastack_url": "http://llama-stack-server.example.com"
     }
   ]
@@ -188,7 +188,7 @@ export const ApiDocumentationModal: React.FC<ApiDocumentationModalProps> = ({
                   variant="expansion"
                   isReadOnly
                 >
-                  {`GET ${baseUrl}/prompt/newsummary/llama32-full`}
+                  {`GET ${baseUrl}/prompt/document-summarizer/llama-3.1-8b-instruct`}
                 </ClipboardCopy>
               </div>
 

@@ -1082,8 +1082,8 @@ async def get_projects_and_models(db: Session = Depends(get_db)):
     {
       "projects": [
         {
-          "name": "newsummary",
-          "provider_id": "llama32-full",
+          "name": "document-summarizer",
+          "provider_id": "llama-3.1-8b-instruct",
           "llamastack_url": "http://llama-stack-server.example.com"
         }
       ]
@@ -1112,12 +1112,12 @@ async def get_prod_prompt(project_name: str, provider_id: str, db: Session = Dep
     combination. If project has git repo, serves from git; otherwise falls back to database.
     
     **Path Parameters:**
-    - `project_name`: The name of the project (e.g., "newsummary")
-    - `provider_id`: The model provider ID (e.g., "llama32-full")
+    - `project_name`: The name of the project (e.g., "document-summarizer")
+    - `provider_id`: The model provider ID (e.g., "llama-3.1-8b-instruct")
     
     **Example Request:**
     ```
-    GET /prompt/newsummary/llama32-full/prod
+    GET /prompt/document-summarizer/llama-3.1-8b-instruct/prod
     ```
     
     **Use Case:** Get only production-ready, tested prompts for deployment
@@ -1209,12 +1209,12 @@ async def get_latest_prompt(
     project and provider combination.
     
     **Path Parameters:**
-    - `project_name`: The name of the project (e.g., "newsummary")
-    - `provider_id`: The model provider ID (e.g., "llama32-full")
+    - `project_name`: The name of the project (e.g., "document-summarizer")
+    - `provider_id`: The model provider ID (e.g., "llama-3.1-8b-instruct")
     
     **Example Request:**
     ```
-    GET /prompt/newsummary/llama32-full
+    GET /prompt/document-summarizer/llama-3.1-8b-instruct
     ```
     
     **Example Response:**
@@ -2325,7 +2325,7 @@ async def root():
     curl http://localhost:3001/api/projects-models
     
     # Get latest prompt for specific project
-    curl http://localhost:3001/prompt/newsummary/llama32-full
+    curl http://localhost:3001/prompt/document-summarizer/llama-3.1-8b-instruct
     ```
     """
     return {
@@ -2342,7 +2342,7 @@ async def root():
         },
         "examples": {
             "get_projects": "curl http://localhost:3001/api/projects-models",
-            "get_prompt": "curl http://localhost:3001/prompt/newsummary/llama32-full"
+            "get_prompt": "curl http://localhost:3001/prompt/document-summarizer/llama-3.1-8b-instruct"
         }
     }
 
