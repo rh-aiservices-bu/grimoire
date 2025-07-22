@@ -1,45 +1,59 @@
-# Grimoire - Prompt Experimentation Tool - Frontend
+# Grimoire - AI Prompt Experimentation Platform - Frontend
 
-A React-based frontend application built with TypeScript, Vite, and PatternFly for experimenting with prompts using Llama Stack models.
+A React-based frontend application built with TypeScript, Vite, and PatternFly for experimenting with prompts, testing backends, and managing AI model workflows in production environments.
 
 ## Technology Stack
 
-- **Framework**: React 18 + TypeScript
-- **Build Tool**: Vite
-- **UI Library**: PatternFly (React)
-- **Styling**: CSS Modules
-- **State Management**: React Hooks
-- **API Client**: Fetch API with streaming support
-- **Development**: Hot Module Replacement (HMR) with Fast Refresh
+- **Framework**: React 18.3.1 + TypeScript 5.8
+- **Build Tool**: Vite 7.0+ with optimized builds
+- **UI Library**: PatternFly 6.2+ (Red Hat Design System)
+- **Styling**: CSS Modules + PatternFly overrides
+- **State Management**: React Hooks + Context API
+- **HTTP Client**: Axios with streaming support
+- **Routing**: React Router 6.28+
+- **Testing**: Vitest + React Testing Library + Coverage
+- **Development**: HMR with React Fast Refresh
 
 ## Features
 
 ### Core Functionality
 - **Project Management**: Create, edit, and delete projects with Llama Stack configurations
-- **Prompt Experimentation**: Interactive prompt editor with template variables
-- **Backend Testing**: Test prompts against configured backend URLs with streaming responses
-- **History Tracking**: View and manage prompt/response history with ratings and notes
-- **Git Integration**: Connect to GitHub/GitLab/Gitea for production workflow
+- **Prompt Experimentation**: Interactive prompt editor with template variables (`{{variable}}`)
+- **Backend Testing**: Dedicated testing interface for external API validation with streaming
+- **Evaluation System**: Integrated prompt evaluation with dataset support and metrics
+- **History Tracking**: Comprehensive prompt/response/test history with ratings and detailed notes
+- **Git Integration**: Multi-platform Git support (GitHub/GitLab/Gitea) for production workflows
+- **Production API**: External endpoints for retrieving production-ready prompt configurations
 
-### UI Components
-- **ProjectList**: Main project dashboard with search and filtering
-- **ProjectModal**: Create new projects with validation
-- **ProjectEditModal**: Edit existing project configurations
-- **PromptExperimentView**: Main prompt experimentation interface
-- **BackendTesting**: Dedicated backend testing interface
-- **HistoryLog**: View and manage prompt history
-- **GitAuthModal**: Git platform authentication
-- **NotesModal**: Add detailed notes to prompts
-- **ApiDocumentationModal**: Interactive API documentation
-- **Branded Header**: Features the Grimoire logo and consistent application branding
+### UI Components & Architecture
+
+**Main Views:**
+- **ProjectList**: Main dashboard with search, filtering, and project management
+- **PromptExperimentView**: Interactive prompt testing and experimentation interface
+- **BackendTesting**: Dedicated backend API testing with performance metrics
+- **HistoryLog**: Unified view of prompt, backend test, and evaluation history
+
+**Modal Components:**
+- **ProjectModal/ProjectEditModal**: Project creation and configuration management
+- **GitAuthModal**: Multi-platform Git authentication (GitHub/GitLab/Gitea)
+- **NotesModal**: Detailed annotation system for prompts and tests
+- **ApiDocumentationModal**: Interactive API documentation with examples
+- **DeleteProjectModal**: Safe project deletion with confirmation
+- **ProdConfirmationModal**: Production deployment confirmation workflow
+
+**Shared Components:**
+- **AppContext**: Global application state and configuration management
+- **Branded Header**: Grimoire logo and consistent Red Hat design patterns
 
 ### Advanced Features
-- **Streaming Responses**: Real-time display of model outputs
-- **Template Variables**: Dynamic prompt templates using `{{variable_name}}` syntax
-- **Production Workflow**: Create Pull Requests for production deployments
-- **Dual History Views**: Switch between experimental and production history
-- **Real-time Sync**: Auto-refresh production data from git repositories
-- **Performance Metrics**: Response time and HTTP status tracking
+- **Streaming Responses**: Real-time token-by-token display of model outputs and backend responses
+- **Template Variables**: Dynamic prompt templates using `{{variable_name}}` syntax with validation
+- **GitOps Workflow**: Create Pull Requests for production deployments with branch management
+- **Multi-view History**: Switch between experimental, backend test, and production history views
+- **Real-time Sync**: Auto-refresh production data from Git repositories with caching
+- **Performance Analytics**: Detailed response times, HTTP status codes, and error tracking
+- **Evaluation Integration**: Automated prompt evaluation with scoring and dataset management
+- **Secure Authentication**: Encrypted Git credential storage with platform-specific token support
 
 ## Development Setup
 
@@ -59,13 +73,29 @@ npm run dev
 ```
 Access the application at http://localhost:5173
 
+### Testing
+```bash
+# Run tests
+npm test
+
+# Run tests with UI
+npm run test:ui
+
+# Generate coverage report
+npm run test:coverage
+```
+
 ### Build for Production
 ```bash
 npm run build
 ```
 
-### Preview Production Build
+### Code Quality
 ```bash
+# Lint code
+npm run lint
+
+# Preview production build
 npm run preview
 ```
 
@@ -74,31 +104,56 @@ npm run preview
 ```
 frontend/
 ├── src/
-│   ├── components/          # React components
-│   │   ├── ApiDocumentationModal.tsx
-│   │   ├── BackendTesting.tsx
-│   │   ├── DeleteProjectModal.tsx
-│   │   ├── GitAuthModal.tsx
-│   │   ├── HistoryLog.tsx
-│   │   ├── NotesModal.tsx
-│   │   ├── ProdConfirmationModal.tsx
-│   │   ├── ProjectEditModal.tsx
-│   │   ├── ProjectList.tsx
-│   │   ├── ProjectModal.tsx
-│   │   └── PromptExperimentView.tsx
-│   ├── types.ts            # TypeScript type definitions
-│   ├── api.ts              # API client with streaming support
-│   ├── App.tsx             # Main application component
-│   ├── App.css             # Global styles
-│   ├── index.css           # Base styles
-│   └── main.tsx            # Application entry point
+│   ├── components/         # Organized component library
+│   │   ├── modals/         # Modal components
+│   │   │   ├── ApiDocumentationModal.tsx
+│   │   │   ├── DeleteProjectModal.tsx
+│   │   │   ├── GitAuthModal.tsx
+│   │   │   ├── NotesModal.tsx
+│   │   │   ├── ProdConfirmationModal.tsx
+│   │   │   ├── ProjectEditModal.tsx
+│   │   │   ├── ProjectModal.tsx
+│   │   │   └── index.tsx   # Modal exports
+│   │   └── shared/         # Shared components
+│   │       ├── BackendTesting.tsx
+│   │       ├── HistoryLog.tsx
+│   │       └── index.tsx   # Shared exports
+│   ├── pages/              # Route-based pages
+│   │   ├── ProjectList/
+│   │   │   ├── ProjectList.tsx
+│   │   │   ├── ProjectList.test.tsx
+│   │   │   └── index.tsx
+│   │   └── PromptExperiment/
+│   │       ├── PromptExperimentView.tsx
+│   │       └── index.tsx
+│   ├── services/           # API and business logic
+│   │   ├── auth.ts         # Authentication services
+│   │   ├── projects.ts     # Project management
+│   │   └── index.ts        # Service exports
+│   ├── context/            # React Context
+│   │   └── AppContext.tsx  # Global state management
+│   ├── styles/             # Styling
+│   │   ├── index.css       # Global styles
+│   │   └── patternfly-overrides.css
+│   ├── test/               # Test configuration
+│   │   └── setup.ts        # Vitest setup
+│   ├── types.ts            # TypeScript definitions
+│   ├── api.ts              # HTTP client with streaming
+│   ├── App.tsx             # Root component
+│   ├── App.test.tsx        # App tests
+│   └── main.tsx            # Application entry
 ├── public/                 # Static assets
-│   ├── grimoire-logo.png   # Application logo
-├── package.json           # Dependencies and scripts
-├── tsconfig.json          # TypeScript configuration
-├── vite.config.ts         # Vite configuration
-├── eslint.config.js       # ESLint configuration
-└── nginx.conf             # Nginx configuration for production
+│   ├── grimoire-logo.png   # Branding
+│   └── vite.svg            # Vite logo
+├── dist/                   # Build output
+├── node_modules/           # Dependencies
+├── Containerfile           # Container build config
+├── nginx.conf              # Production web server
+├── package.json            # Project configuration
+├── tsconfig.json           # TypeScript config
+├── vite.config.ts          # Build configuration
+├── vitest.config.ts        # Test configuration
+└── eslint.config.js        # Linting rules
 ```
 
 ## Configuration
@@ -118,20 +173,35 @@ Includes React-specific rules and TypeScript type checking for production-ready 
 ## API Integration
 
 The frontend communicates with the backend through:
-- **REST API**: Standard CRUD operations
-- **Server-Sent Events**: Real-time streaming for generation and testing
-- **WebSocket-like**: Long-lived connections for git synchronization
+- **REST API**: Standard CRUD operations with comprehensive error handling
+- **Server-Sent Events**: Real-time streaming for Llama Stack inference and backend testing
+- **Streaming HTTP**: Long-lived connections for Git synchronization and real-time updates
+- **Production APIs**: External endpoints for retrieving production prompt configurations
+- **Git Integration**: Secure authentication and repository management APIs
 
 ## Container Support
 
 ### Development
 ```bash
-docker build -t prompt-tool-frontend:dev -f Containerfile .
-docker run -p 3000:3000 prompt-tool-frontend:dev
+# Build development container
+podman build -t grimoire-frontend:dev -f Containerfile .
+podman run -p 3000:80 grimoire-frontend:dev
 ```
 
 ### Production
-The frontend is served by Nginx with optimized static asset delivery and API proxying.
+```bash
+# Multi-stage production build
+podman build -t grimoire-frontend:prod -f Containerfile .
+
+# Run with custom backend URL
+podman build --build-arg VITE_BACKEND_URL=https://api.example.com -t grimoire-frontend:prod .
+```
+
+The frontend is served by Nginx with:
+- Optimized static asset delivery with compression
+- API proxying and CORS handling
+- Security headers and caching strategies
+- OpenShift-compatible non-root user configuration
 
 ## Performance Optimizations
 

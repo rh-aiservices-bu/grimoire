@@ -1,12 +1,13 @@
-# Grimoire - Prompt Experimentation Tool API Documentation
+# Grimoire - AI Prompt Experimentation Platform API Documentation
 
 ## 🌐 Interactive Documentation
 
 The API provides comprehensive interactive documentation through multiple interfaces:
 
-- **Swagger UI**: http://localhost:3001/docs - Interactive testing interface
-- **ReDoc**: http://localhost:3001/redoc - Clean documentation interface  
-- **OpenAPI JSON**: http://localhost:3001/openapi.json - Raw specification
+- **Swagger UI**: http://localhost:3001/docs - Interactive testing interface with live examples
+- **ReDoc**: http://localhost:3001/redoc - Clean, mobile-friendly documentation interface  
+- **OpenAPI JSON**: http://localhost:3001/openapi.json - Raw OpenAPI 3.0 specification
+- **Health Check**: http://localhost:3001/api - OpenShift-compatible health endpoint
 
 ## 🚀 Quick Start
 
@@ -126,7 +127,35 @@ curl -X POST http://localhost:3001/api/projects/1/test-backend \
   }'
 ```
 
-### 6. Get Test Settings from Git
+### 6. Generate Streaming Response
+```bash
+curl -X POST http://localhost:3001/api/projects/1/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_prompt": "Explain {{concept}} in simple terms",
+    "system_prompt": "You are a helpful teacher",
+    "variables": {"concept": "machine learning"},
+    "temperature": 0.7,
+    "max_len": 200,
+    "top_p": 0.9,
+    "top_k": 50
+  }'
+```
+
+### 7. Run Evaluation
+```bash
+curl -X POST http://localhost:3001/api/projects/1/eval \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_prompt": "Summarize: {{text}}",
+    "system_prompt": "You are a summarization expert",
+    "eval_dataset": "xsum",
+    "num_samples": 10,
+    "scoring_functions": ["relevance", "coherence", "conciseness"]
+  }'
+```
+
+### 8. Get Test Settings from Git
 ```bash
 curl http://localhost:3001/api/projects/1/test-settings
 ```
@@ -185,15 +214,23 @@ curl http://localhost:3001/api/projects/1/test-settings
 - **Use Case**: Git-based production deployment workflow
 - **Platform Support**: GitHub, GitLab, and Gitea fully supported
 
-### Backend Testing
-- **POST** `/api/projects/{id}/test-backend` - Test backend with streaming responses
-- **GET** `/api/projects/{id}/backend-history` - Get backend test history
-- **PUT** `/api/projects/{id}/backend-history/{historyId}` - Update backend test status
+### Backend Testing & Evaluation
+- **POST** `/api/projects/{id}/test-backend` - Test backend with streaming responses and performance metrics
+- **GET** `/api/projects/{id}/backend-history` - Get comprehensive backend test history
+- **PUT** `/api/projects/{id}/backend-history/{historyId}` - Update backend test status and ratings
 - **POST** `/api/projects/{id}/backend-history/{historyId}/tag-prod` - Create production PR from backend test
 - **POST** `/api/projects/{id}/backend-history/{historyId}/tag-test` - Save test settings from backend test
-- **Tag**: `Backend Testing`
-- **Use Case**: Test prompts against configured backend URLs
-- **Features**: Streaming responses, performance metrics, template variables
+- **POST** `/api/projects/{id}/eval` - Run LlamaStack evaluation with scoring functions and datasets
+- **POST** `/api/projects/{id}/generate` - Generate responses using LlamaStack with streaming
+- **Tag**: `Backend Testing`, `Generation`, `Evaluation`
+- **Use Case**: Test prompts against configured backend URLs, evaluate with datasets, generate streaming responses
+- **Features**: 
+  - Server-Sent Events (SSE) streaming
+  - Performance metrics and error tracking
+  - Template variable substitution (`{{variable}}`)
+  - LLM-as-judge evaluation scoring
+  - Dataset integration (HuggingFace compatible)
+  - Response time analytics
 
 ### Settings Management
 - **GET** `/api/projects/{id}/test-settings` - Get test settings from git
@@ -206,14 +243,44 @@ curl http://localhost:3001/api/projects/1/test-settings
 
 Endpoints are organized into logical groups:
 
-- **📁 Projects** - Project CRUD operations
-- **📜 History** - Prompt history management  
-- **⚡ Generation** - Response generation (streaming)
-- **🧪 Backend Testing** - Backend testing and validation
-- **🔀 Git** - Git platform authentication and operations
-- **⚙️ Settings** - Git-based settings management
-- **🌍 External API** - Integration endpoints
-- **📖 Documentation** - API information
+- **📁 Projects** - Project CRUD operations with automatic git integration
+- **📜 History** - Comprehensive prompt and test history management  
+- **⚡ Generation** - LlamaStack response generation with streaming
+- **🧪 Backend Testing** - External API testing with performance analytics
+- **🔬 Evaluation** - Advanced prompt evaluation with LLM scoring
+- **🔀 Git** - Multi-platform Git authentication and workflow operations
+- **⚙️ Settings** - Git-based configuration management with version control
+- **🌍 External API** - Production integration endpoints for external systems
+- **🏥 Health** - Monitoring and debugging endpoints
+- **📖 Documentation** - Interactive API documentation and guides
+
+## 📊 Advanced Features
+
+### **Streaming Support**
+All generation and testing endpoints support Server-Sent Events (SSE):
+- **Content-Type**: `text/event-stream`
+- **Event Types**: `token`, `done`, `error`, `status`
+- **Performance Metrics**: Response time, token count, error tracking
+
+### **Template Engine**
+Dynamic prompt templates with variable substitution:
+- **Syntax**: `{{variable_name}}`
+- **Validation**: Template validation and variable requirement checking
+- **Nested Variables**: Support for complex data structures
+
+### **Evaluation System** ⭐ **NEW**
+Comprehensive prompt evaluation framework:
+- **LLM-as-Judge**: Automated scoring using LlamaStack models
+- **Dataset Integration**: HuggingFace dataset compatibility
+- **Scoring Functions**: Configurable evaluation criteria
+- **Batch Processing**: Evaluate prompts against multiple test cases
+
+### **GitOps Integration**
+Full Git workflow with enterprise support:
+- **Platforms**: GitHub (cloud/enterprise), GitLab (cloud/self-hosted), Gitea
+- **Security**: Fernet-encrypted token storage
+- **Workflows**: Automatic PR creation, commit tracking, branch management
+- **Caching**: Git commit caching for improved performance
 
 ## 🔗 Template Variables
 
@@ -419,10 +486,73 @@ data: {"type": "done", "response_time": 1.23}
 - `done`: End of stream with performance metrics
 - `error`: Error occurred during streaming
 
-## 🔍 Debug Endpoints
+## 🔍 Complete Endpoint Reference
 
-### Debug Information
-- **GET** `/api/debug/projects` - Debug endpoint for projects
-- **Tag**: `Debug`
-- **Use Case**: Troubleshooting and development
-- **Features**: Detailed project information with relationships
+### **Health & Monitoring**
+- **GET** `/` - API overview and documentation home
+- **GET** `/api` - Health check endpoint (OpenShift compatible)
+- **GET** `/api/debug/projects` - Debug information with project relationships
+
+### **Project Management**
+- **GET** `/api/projects` - List all projects with basic information
+- **POST** `/api/projects` - Create new project (auto-creates git PRs if configured)
+- **GET** `/api/projects/{project_id}` - Get specific project details
+- **PUT** `/api/projects/{project_id}` - Update project configuration
+- **DELETE** `/api/projects/{project_id}` - Delete project (cascades to all related data)
+
+### **Prompt History & Management**
+- **GET** `/api/projects/{project_id}/history` - Get prompt history with git integration
+- **POST** `/api/projects/{project_id}/history` - Save new prompt to history
+- **PUT** `/api/projects/{project_id}/history/{history_id}` - Update prompt (rating, notes, production status)
+- **POST** `/api/projects/{project_id}/history/{history_id}/tag-prod` - Create production PR
+- **POST** `/api/projects/{project_id}/history/{history_id}/tag-test` - Commit to git as test
+
+### **Generation & AI Operations**
+- **POST** `/api/projects/{project_id}/generate` - **STREAMING** - Generate responses with LlamaStack
+- **POST** `/api/projects/{project_id}/eval` - **ADVANCED** - Run evaluation with scoring functions
+
+### **Backend Testing**
+- **GET** `/api/projects/{project_id}/backend-history` - Get backend test results
+- **PUT** `/api/projects/{project_id}/backend-history/{history_id}` - Update backend test
+- **POST** `/api/projects/{project_id}/test-backend` - **STREAMING** - Test external backend APIs
+- **POST** `/api/projects/{project_id}/backend-history/{history_id}/tag-prod` - Create production PR from test
+- **POST** `/api/projects/{project_id}/backend-history/{history_id}/tag-test` - Save test settings to git
+
+### **Git Integration & Workflows**
+- **POST** `/api/git/auth` - Authenticate with GitHub/GitLab/Gitea
+- **GET** `/api/git/user` - Get authenticated git user information
+- **GET** `/api/git/auth-status` - Check git authentication status
+- **POST** `/api/git/sync-all` - Sync all projects with git repositories
+- **POST** `/api/projects/{project_id}/git/test-access` - Test git repository access
+- **GET** `/api/projects/{project_id}/pending-prs` - Get pending PRs with live status
+- **POST** `/api/projects/{project_id}/sync-prs` - Sync PR statuses from git
+- **GET** `/api/projects/{project_id}/prod-history` - Get production history from git
+- **GET** `/api/projects/{project_id}/git-history` - Get unified git history
+
+### **Settings & Configuration**
+- **GET** `/api/projects/{project_id}/test-settings` - Get test settings from git
+- **POST** `/api/projects/{project_id}/test-settings` - Save test settings to git
+
+### **External Integration APIs**
+- **GET** `/api/projects-models` - List projects and models for external integration
+- **GET** `/prompt/{project_name}/{provider_id}` - Get latest prompt configuration
+- **GET** `/prompt/{project_name}/{provider_id}/prod` - Get production prompt from git
+
+## 🚨 Important Notes
+
+### **Streaming Endpoints**
+The following endpoints return Server-Sent Events:
+- `/api/projects/{id}/generate` - Token-by-token LlamaStack generation
+- `/api/projects/{id}/test-backend` - Real-time backend testing responses
+
+### **Git Platform Support**
+Fully supports authentication and operations with:
+- **GitHub**: Personal Access Tokens, GitHub Enterprise
+- **GitLab**: Private Tokens, self-hosted GitLab instances
+- **Gitea**: Access Tokens, self-hosted Gitea instances
+
+### **Security Features**
+- Token encryption using Fernet symmetric encryption
+- Rate limiting on git operations
+- CORS middleware for OpenShift deployment
+- Secure credential storage and management
