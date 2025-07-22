@@ -19,8 +19,15 @@ import {
   EmptyState,
   EmptyStateBody,
   ClipboardCopy,
+  Modal,
+  ModalVariant,
+  CodeBlock,
+  CodeBlockCode,
+  Tabs,
+  Tab,
+  TabTitleText,
 } from '@patternfly/react-core';
-import { PlusIcon, ClockIcon, CopyIcon } from '@patternfly/react-icons';
+import { PlusIcon, ClockIcon, CopyIcon, EyeIcon } from '@patternfly/react-icons';
 import { Project, PromptHistory, ModelParameters } from '../../types';
 import { api } from '../../api';
 
@@ -82,6 +89,9 @@ export const PlaygroundPage: React.FC<PlaygroundPageProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [history, setHistory] = useState<PromptHistory[]>([]);
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const [requestPayload, setRequestPayload] = useState<any>(null);
+  const [requestModalTab, setRequestModalTab] = useState<string | number>('json');
 
   // Convenience getters for state properties
   const { messages, variables, variableInput, modelParams, response, thoughtProcess, footerInput } = state;
@@ -150,6 +160,37 @@ export const PlaygroundPage: React.FC<PlaygroundPageProps> = ({
 
   const handleRoleSelect = (messageId: string, role: 'System' | 'User' | 'Assistant') => {
     updateMessage(messageId, 'role', role);
+  };
+
+  const buildRequestPayload = () => {
+    const userMessages = messages.filter(msg => msg.role === 'User' && msg.content.trim());
+    const systemMessages = messages.filter(msg => msg.role === 'System' && msg.content.trim());
+    
+    const userPrompt = footerInput.trim() || userMessages[0]?.content || '';
+    const systemPrompt = systemMessages.length > 0 ? systemMessages[0].content : undefined;
+    
+    return {
+      userPrompt,
+      systemPrompt,
+      variables: Object.keys(variables).length > 0 ? variables : undefined,
+      ...modelParams,
+    };
+  };
+
+  const buildCurlCommand = (payload: any) => {
+    // Assume we're running locally - could be made configurable
+    const apiUrl = `${window.location.origin}/api/projects/${project.id}/generate`;
+    
+    return `curl -X POST "${apiUrl}" \\
+  -H "Content-Type: application/json" \\
+  -d '${JSON.stringify(payload, null, 2)}'`;
+  };
+
+  const handleSeeRequest = () => {
+    const payload = buildRequestPayload();
+    setRequestPayload(payload);
+    setRequestModalTab('json'); // Reset to JSON tab
+    setIsRequestModalOpen(true);
   };
 
   const handleGenerate = async () => {
@@ -366,13 +407,27 @@ export const PlaygroundPage: React.FC<PlaygroundPageProps> = ({
           alignItems: 'center',
           marginTop: '1rem'
         }}>
-          <Button
-            variant="primary"
-            onClick={handleGenerate}
-            isDisabled={isLoading}
-          >
-            {isLoading ? <Spinner size="sm" /> : 'Generate Response'}
-          </Button>
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+            <Button
+              variant="primary"
+              onClick={handleGenerate}
+              isDisabled={isLoading}
+            >
+              {isLoading ? <Spinner size="sm" /> : 'Generate Response'}
+            </Button>
+            <Button
+              variant="secondary"
+              icon={<EyeIcon />}
+              onClick={handleSeeRequest}
+              style={{ 
+                color: '#6a6e73',
+                borderColor: '#d2d2d2',
+                backgroundColor: 'transparent'
+              }}
+            >
+              See Request
+            </Button>
+          </div>
           {error && (
             <Alert variant="danger" title="Error" style={{ marginLeft: '1rem', flex: 1 }}>
               {error}
@@ -564,6 +619,51 @@ export const PlaygroundPage: React.FC<PlaygroundPageProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Request Payload Modal */}
+      <Modal
+        variant={ModalVariant.large}
+        title="API Request Details"
+        isOpen={isRequestModalOpen}
+        onClose={() => setIsRequestModalOpen(false)}
+      >
+        <div style={{ padding: '1rem 1rem 1rem 1rem' }}>
+          <div style={{ marginBottom: '1rem' }}>
+            <p style={{ color: '#666', fontSize: '0.875rem', margin: 0 }}>
+              This shows the exact request that will be sent to the API when you press "Generate Response":
+            </p>
+          </div>
+          
+          <Tabs 
+            activeKey={requestModalTab} 
+            onSelect={(event, tabIndex) => setRequestModalTab(tabIndex)}
+            style={{ marginBottom: '1rem' }}
+          >
+            <Tab eventKey="json" title={<TabTitleText>JSON Payload</TabTitleText>}>
+              {requestPayload && (
+                <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#f8f9fa', borderRadius: '6px' }}>
+                  <CodeBlock>
+                    <CodeBlockCode>
+                      {JSON.stringify(requestPayload, null, 2)}
+                    </CodeBlockCode>
+                  </CodeBlock>
+                </div>
+              )}
+            </Tab>
+            <Tab eventKey="curl" title={<TabTitleText>cURL Command</TabTitleText>}>
+              {requestPayload && (
+                <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#f8f9fa', borderRadius: '6px' }}>
+                  <CodeBlock>
+                    <CodeBlockCode>
+                      {buildCurlCommand(requestPayload)}
+                    </CodeBlockCode>
+                  </CodeBlock>
+                </div>
+              )}
+            </Tab>
+          </Tabs>
+        </div>
+      </Modal>
     </div>
   );
 };

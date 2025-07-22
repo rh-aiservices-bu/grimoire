@@ -8,6 +8,7 @@ import { api } from '../../api';
 import { LeftNavigation, NavigationPage } from '../../components/shared';
 import { ProjectEditModal, DeleteProjectModal, ApiDocumentationModal } from '../../components/modals';
 import { PlaygroundPage } from './PlaygroundPage';
+import { PromptHistoryPage } from './PromptHistoryPage';
 
 interface PromptExperimentViewProps {
   project: Project;
@@ -98,6 +99,13 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
       case 'playground':
         return (
           <PlaygroundPage
+            project={currentProject}
+            onNotification={onNotification}
+          />
+        );
+      case 'prompt':
+        return (
+          <PromptHistoryPage
             project={currentProject}
             onNotification={onNotification}
           />

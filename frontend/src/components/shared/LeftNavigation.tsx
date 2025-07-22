@@ -10,9 +10,10 @@ import {
   ChartLineIcon,
   CodeIcon,
   CogIcon,
+  HistoryIcon,
 } from '@patternfly/react-icons';
 
-export type NavigationPage = 'playground' | 'evaluation' | 'backend-testing' | 'settings';
+export type NavigationPage = 'playground' | 'prompt' | 'evaluation' | 'backend-testing' | 'settings';
 
 interface LeftNavigationProps {
   activePage: NavigationPage;
@@ -33,6 +34,12 @@ const navigationItems: NavMenuItem[] = [
     label: 'Playground',
     icon: FlaskIcon,
     description: 'Interactive prompt experimentation'
+  },
+  {
+    id: 'prompt',
+    label: 'Prompts',
+    icon: HistoryIcon,
+    description: 'Browse and analyze prompt history'
   },
   // Future menu items (commented out for now)
   // {
