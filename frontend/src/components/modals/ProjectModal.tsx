@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Modal,
   ModalVariant,
@@ -20,9 +20,10 @@ interface ProjectModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (data: { name: string; description?: string; llamastackUrl: string; providerId: string; gitRepoUrl?: string; testBackendUrl?: string }) => void;
+  isCreating?: boolean;
 }
 
-export const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit }) => {
+export const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, isCreating = false }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [llamastackUrl, setLlamastackUrl] = useState('');
@@ -30,8 +31,17 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onS
   const [gitRepoUrl, setGitRepoUrl] = useState('');
   const [testBackendUrl, setTestBackendUrl] = useState('');
 
+  const resetForm = () => {
+    setName('');
+    setDescription('');
+    setLlamastackUrl('');
+    setProviderId('');
+    setGitRepoUrl('');
+    setTestBackendUrl('');
+  };
+
   const handleSubmit = () => {
-    if (name && llamastackUrl && providerId) {
+    if (name && llamastackUrl && providerId && !isCreating) {
       onSubmit({ 
         name, 
         description: description || undefined, 
@@ -40,15 +50,15 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onS
         gitRepoUrl: gitRepoUrl || undefined,
         testBackendUrl: testBackendUrl || undefined
       });
-      setName('');
-      setDescription('');
-      setLlamastackUrl('');
-      setProviderId('');
-      setGitRepoUrl('');
-      setTestBackendUrl('');
-      onClose();
     }
   };
+
+  // Close modal and reset form when creation completes successfully
+  useEffect(() => {
+    if (!isCreating && !isOpen) {
+      resetForm();
+    }
+  }, [isCreating, isOpen]);
 
   return (
     <Modal
@@ -147,10 +157,21 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onS
         </Form>
       </ModalBody>
       <ModalFooter>
-        <Button key="create" variant="primary" onClick={handleSubmit}>
-          Create Project
+        <Button 
+          key="create" 
+          variant="primary" 
+          onClick={handleSubmit}
+          isLoading={isCreating}
+          isDisabled={isCreating || !name || !llamastackUrl || !providerId}
+        >
+          {isCreating ? 'Creating Project...' : 'Create Project'}
         </Button>
-        <Button key="cancel" variant="link" onClick={onClose}>
+        <Button 
+          key="cancel" 
+          variant="link" 
+          onClick={onClose}
+          isDisabled={isCreating}
+        >
           Cancel
         </Button>
       </ModalFooter>

@@ -223,95 +223,20 @@ async def get_prompt_history(project_id: int, db: Session = Depends(get_db)):
                 if not recent_access:
                     token = git_service.decrypt_token(user.git_access_token)
                     
-                    # Get current production prompt from git
-                    try:
-                        current_prod_result = git_service.get_prod_prompt_from_git(
-                            user.git_platform,
-                            token,
-                            project.git_repo_url,
-                            project.name,
-                            project.provider_id
-                        )
-                        if current_prod_result:
-                            current_prod = current_prod_result['prompt_data']
-                            commit_timestamp = current_prod_result.get('commit_timestamp')
-                            
-                            # Use commit timestamp if available, otherwise fallback to current time
-                            created_at = commit_timestamp if commit_timestamp else datetime.now()
-                            if isinstance(created_at, str):
-                                created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
-                            
-                            prod_entry = PromptHistoryResponse(
-                                id=-1,  # Special ID for current prod
-                                project_id=project_id,
-                                user_prompt=current_prod.user_prompt,
-                                system_prompt=current_prod.system_prompt,
-                                variables=current_prod.variables,
-                                temperature=current_prod.temperature,
-                                max_len=current_prod.max_len,
-                                top_p=current_prod.top_p,
-                                top_k=current_prod.top_k,
-                                response=None,
-                                backend_response=None,
-                                rating=None,
-                                notes="🚀 PRODUCTION - Active in git repository",
-                                is_prod=True,
-                                has_merged_pr=False,
-                                created_at=created_at
-                            )
-                            result.append(prod_entry)
-                    except Exception as e:
-                        print(f"Failed to get current prod prompt: {e}")
-                    
-                    # Get current test settings from git
-                    try:
-                        current_test_result = git_service.get_test_settings_from_git(
-                            user.git_platform,
-                            token,
-                            project.git_repo_url,
-                            project.name,
-                            project.provider_id
-                        )
-                        if current_test_result:
-                            current_test = current_test_result['test_settings']
-                            commit_timestamp = current_test_result.get('commit_timestamp')
-                            
-                            # Use commit timestamp if available, otherwise fallback to current time
-                            created_at = commit_timestamp if commit_timestamp else datetime.now()
-                            if isinstance(created_at, str):
-                                created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
-                            
-                            test_entry = PromptHistoryResponse(
-                                id=-2,  # Special ID for current test
-                                project_id=project_id,
-                                user_prompt=current_test.get('userPrompt', ''),
-                                system_prompt=current_test.get('systemPrompt', ''),
-                                variables=current_test.get('variables', {}),
-                                temperature=current_test.get('temperature', 0.7),
-                                max_len=current_test.get('maxLen', 1000),
-                                top_p=current_test.get('topP', 0.9),
-                                top_k=current_test.get('topK', 50),
-                                response=None,
-                                backend_response=None,
-                                rating=None,
-                                notes="🧪 TEST - Active test configuration in git",
-                                is_prod=False,
-                                has_merged_pr=False,
-                                created_at=created_at
-                            )
-                            result.append(test_entry)
-                    except Exception as e:
-                        print(f"Failed to get current test settings: {e}")
+                    # NOTE: Removed duplicate prod/test cards creation logic
+                    # The System Status section in the frontend now handles 
+                    # displaying current prod/test status more elegantly
                 else:
                     print(f"⏰ Skipping git access for project {project_id} (accessed recently)")
                     
             except Exception as e:
                 print(f"Failed to decrypt token or access git: {e}")
     
-    # Get regular history from database
+    # Get regular history from database - keep in natural chronological order
+    # DO NOT sort by is_prod status - prompts should remain in their natural creation order
     history = db.query(PromptHistory).filter(
         PromptHistory.project_id == project_id
-    ).order_by(PromptHistory.is_prod.desc(), PromptHistory.created_at.desc()).all()
+    ).order_by(PromptHistory.created_at.desc()).all()
     
     # Parse variables JSON and check for merged PRs
     for item in history:

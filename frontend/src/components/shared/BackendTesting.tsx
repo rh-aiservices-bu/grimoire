@@ -579,6 +579,7 @@ EXPECTED_RESPONSE: {expected_answer}`
                       <Form>
                         <FormGroup label="Dataset URL" isRequired>
                           <TextArea
+                            id="eval-dataset"
                             value={dataset}
                             onChange={(_, value) => setDataset(value)}
                             placeholder="huggingface://datasets/llamastack/simpleqa?split=train"
@@ -600,6 +601,7 @@ EXPECTED_RESPONSE: {expected_answer}`
                       <Form>
                         <FormGroup>
                           <TextArea
+                            id="eval-config"
                             value={evalConfig}
                             onChange={(_, value) => setEvalConfig(value)}
                             placeholder="Enter eval configuration in JSON format"

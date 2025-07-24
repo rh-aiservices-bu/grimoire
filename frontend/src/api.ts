@@ -207,10 +207,6 @@ export const api = {
     return response.data;
   },
 
-  testGitRepoAccess: async (projectId: number): Promise<void> => {
-    await axios.post(`${getApiBase()}/projects/${projectId}/git/test-access`);
-  },
-
   // Git operations
   tagPromptAsProd: async (projectId: number, historyId: number): Promise<{
     message: string;
@@ -429,6 +425,36 @@ export const api = {
     commit_url?: string;
   }> => {
     const response = await axios.post(`${getApiBase()}/projects/${projectId}/history/${historyId}/tag-test`);
+    return response.data;
+  },
+
+  // Sync PR status
+  syncPRStatus: async (projectId: number): Promise<{ message: string }> => {
+    const response = await axios.post(`${getApiBase()}/projects/${projectId}/sync-prs`);
+    return response.data;
+  },
+
+  // Get production history from Git
+  getProdHistoryFromGit: async (projectId: number): Promise<any[]> => {
+    const response = await axios.get(`${getApiBase()}/projects/${projectId}/prod-history`);
+    return response.data;
+  },
+
+  // Get Git history
+  getGitHistory: async (projectId: number): Promise<any[]> => {
+    const response = await axios.get(`${getApiBase()}/projects/${projectId}/git-history`);
+    return response.data;
+  },
+
+  // Test Git repository access
+  testGitRepoAccess: async (projectId: number): Promise<{ message: string; accessible: boolean }> => {
+    const response = await axios.post(`${getApiBase()}/projects/${projectId}/git/test-access`);
+    return response.data;
+  },
+
+  // Sync all Git projects (uses existing backend bulk sync)
+  syncAllGitProjects: async (): Promise<{ message: string; results: any[] }> => {
+    const response = await axios.post(`${getApiBase()}/git/sync-all`);
     return response.data;
   },
 };

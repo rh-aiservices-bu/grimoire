@@ -8,6 +8,7 @@ interface AppState {
   selectedProject: Project | null;
   gitUser: GitUser | null;
   isLoading: boolean;
+  isCreatingProject: boolean;
   error: string;
   notifications: Notification[];
 }
@@ -25,6 +26,7 @@ interface Notification {
 // Action types
 type AppAction =
   | { type: 'SET_LOADING'; payload: boolean }
+  | { type: 'SET_CREATING_PROJECT'; payload: boolean }
   | { type: 'SET_ERROR'; payload: string }
   | { type: 'SET_PROJECTS'; payload: Project[] }
   | { type: 'SET_SELECTED_PROJECT'; payload: Project | null }
@@ -50,6 +52,8 @@ function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case 'SET_LOADING':
       return { ...state, isLoading: action.payload };
+    case 'SET_CREATING_PROJECT':
+      return { ...state, isCreatingProject: action.payload };
     case 'SET_ERROR':
       return { ...state, error: action.payload };
     case 'SET_PROJECTS':
@@ -164,10 +168,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       gitRepoUrl?: string;
     }) => {
       try {
+        dispatch({ type: 'SET_CREATING_PROJECT', payload: true });
         const newProject = await api.createProject(data);
         dispatch({ type: 'ADD_PROJECT', payload: newProject });
         dispatch({ type: 'SET_SELECTED_PROJECT', payload: newProject });
+        dispatch({ type: 'SET_CREATING_PROJECT', payload: false });
       } catch (error) {
+        dispatch({ type: 'SET_CREATING_PROJECT', payload: false });
         dispatch({ type: 'SET_ERROR', payload: 'Failed to create project' });
         console.error('Failed to create project:', error);
       }

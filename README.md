@@ -1,27 +1,39 @@
 # Grimoire - AI Prompt Experimentation & Production Platform
 
-A comprehensive web application designed for experimenting with, testing, and productionizing AI prompts. Provides seamless integration with Llama Stack servers, dedicated backend testing capabilities, evaluation systems, and GitOps workflows for enterprise-grade prompt management.
+A comprehensive enterprise-grade web application for experimenting with, testing, and productionizing AI prompts. Built with FastAPI and React, Grimoire provides seamless integration with Llama Stack servers, advanced backend testing capabilities, automated evaluation systems, and complete GitOps workflows for professional prompt management.
 
-## Features
+## 🚀 Features
 
-### Core Functionality
-- **Llama Stack Integration**: Direct connection to Llama Stack servers with configurable provider IDs
-- **Model Parameter Control**: Fine-tune temperature, max_len, top_p, and top_k for Llama models
-- **Streaming Responses**: Real-time streaming output from Llama Stack inference
-- **Prompt Experimentation**: Interactive editor with template variables (`{{variable}}`)
-- **Backend Testing**: Dedicated testing framework for external API validation
-- **Evaluation System**: Automated prompt evaluation with HuggingFace dataset integration
+### **Core Functionality**
+- **🦙 Llama Stack Integration**: Direct connection to Llama Stack servers with configurable provider IDs and model parameters
+- **🎛️ Advanced Model Controls**: Fine-tune temperature, max_len, top_p, and top_k parameters with real-time preview
+- **📡 Streaming Responses**: Real-time Server-Sent Events (SSE) streaming from Llama Stack inference with delta updates
+- **🔧 Template Variables**: Dynamic prompt templates using `{{variable}}` syntax with validation and substitution
+- **🧪 Backend Testing Framework**: Comprehensive testing against external API endpoints with performance analytics
+- **📊 Evaluation System**: Automated prompt evaluation with LlamaStack scoring functions and dataset integration
+- **📝 Interactive History**: Rich prompt and test history with ratings, detailed notes, and search capabilities
+- **💬 Multi-Message Conversations**: Support for System/User/Assistant role-based conversations with context management
+- **🧠 Thought Process Extraction**: Automatic extraction and display of model reasoning from `<think>` tags
+- **🎯 Prompt Management Interface**: Visual prompt browser with production promotion workflow and status tracking
 
-### Production & Workflow
-- **GitOps Integration**: GitHub/GitLab/Gitea support with Pull Request workflows
-- **Production API**: External endpoints for retrieving production-ready prompts
-- **History Tracking**: Comprehensive prompt and test history with ratings and notes
-- **Secure Authentication**: Encrypted Git credential storage with multi-platform support
+### **Production & GitOps Workflow**
+- **🔗 Multi-Git Platform Support**: Full integration with GitHub, GitLab, and Gitea (including self-hosted instances)
+- **🔄 Automated Pull Requests**: Automatic PR creation for production deployments with branch management
+- **🏭 Production API**: External REST endpoints for retrieving production-ready prompt configurations
+- **🔐 Secure Authentication**: Fernet-encrypted Git credential storage with platform-specific token support
+- **📈 Git History Integration**: Unified commit tracking and production prompt versioning
+- **⚡ Real-time Sync**: Live PR status updates and repository synchronization
+- **🎯 Test → Production Workflow**: Visual promotion pipeline with approval gates and production tracking
+- **📋 Pending PR Dashboard**: Real-time monitoring of deployment status with merge tracking
+- **⚙️ Git-based Settings**: Version-controlled test configurations and environment management
 
-### Deployment & Infrastructure
-- **Container Ready**: OpenShift-compatible containers with health checks
-- **Kubernetes Support**: Complete Helm charts with ingress and persistent storage
-- **Development Tools**: Docker Compose setup and workbench containers
+### **Enterprise Deployment**
+- **🐳 Container-First Design**: OpenShift-compatible containers with non-root users and health checks
+- **☸️ Kubernetes Native**: Complete Helm charts with ingress, persistent storage, and service mesh support
+- **🛠️ Development Tools**: Docker Compose setup, development workbenches, and debugging containers
+- **📦 Multi-Architecture**: Support for x86_64 and ARM64 container builds
+- **🎨 Modern UI**: PatternFly React components with responsive design and enterprise branding
+- **🧭 Intuitive Navigation**: Sidebar navigation with project-specific menus and organized feature sections
 
 ## Quick Start
 
@@ -62,22 +74,44 @@ podman build -t grimoire:workbench -f backend/Containerfile.workbench .
 helm install grimoire ./helm --set ingress.enabled=true
 ```
 
-## Key API Endpoints
+## 🌐 API Reference
 
-### External Integration APIs
-- **GET** `/api/projects-models` - List available projects and models
-- **GET** `/prompt/{project}/{provider}` - Get latest prompt configuration  
-- **GET** `/prompt/{project}/{provider}/prod` - Get production prompt from Git
+### **External Integration APIs**
+- **GET** `/api/projects-models` - Discover available projects and model configurations
+- **GET** `/prompt/{project_name}/{provider_id}` - Retrieve latest prompt configuration with variables
+- **GET** `/prompt/{project_name}/{provider_id}/prod` - Get production-ready prompts from Git repository
+- **POST** `/api/projects/{id}/test-backend` - Test prompts against external backend APIs with streaming
+- **POST** `/api/projects/{id}/eval` - Run automated prompt evaluations with LLM-as-judge scoring
+- **GET** `/api/projects/{id}/test-settings` - Retrieve Git-stored test configurations and variables
 
-### Interactive Documentation
-- **Swagger UI**: http://localhost:3001/docs
-- **ReDoc**: http://localhost:3001/redoc
-- **OpenAPI Spec**: http://localhost:3001/openapi.json
+### **Interactive Documentation**
+- **📖 Swagger UI**: http://localhost:3001/docs - Interactive API testing with live examples
+- **📚 ReDoc**: http://localhost:3001/redoc - Clean, comprehensive API documentation
+- **🔧 OpenAPI Spec**: http://localhost:3001/openapi.json - Machine-readable API specification
+- **🏥 Health Check**: http://localhost:3001/api - OpenShift-compatible health endpoint
 
-### Core Features
-- **POST** `/api/projects/{id}/test-backend` - Test backend APIs with streaming
-- **POST** `/api/projects/{id}/history/{historyId}/tag-prod` - Create production PR  
-- **POST** `/api/git/auth` - Authenticate with Git platforms (GitHub/GitLab/Gitea)
+### **Core API Features**
+- **🧪 Backend Testing**: `POST /api/projects/{id}/test-backend` - Stream external API tests with metrics
+- **🚀 Generation**: `POST /api/projects/{id}/generate` - Stream LlamaStack responses with SSE
+- **📊 Evaluation**: `POST /api/projects/{id}/eval` - Run automated evaluations with scoring
+- **🔄 Production Workflow**: `POST /api/projects/{id}/history/{historyId}/tag-prod` - Create production PRs
+- **🔐 Git Authentication**: `POST /api/git/auth` - Multi-platform Git integration (GitHub/GitLab/Gitea)
+- **📈 History Management**: Full CRUD operations for prompt and test history with Git integration
+- **⚙️ Settings Management**: `GET/POST /api/projects/{id}/test-settings` - Git-based configuration storage
+- **📋 PR Tracking**: `GET /api/projects/{id}/pending-prs` - Real-time pull request status monitoring
+- **🔬 Backend Test History**: `GET /api/projects/{id}/backend-history` - Comprehensive test result tracking
+- **🎯 Test Promotion**: `POST /api/projects/{id}/backend-history/{historyId}/tag-prod` - Promote backend tests to production
+
+### **Advanced Features**
+- **🌊 Streaming Support**: Server-Sent Events for real-time responses with token-by-token updates
+- **🔧 Template Engine**: Dynamic `{{variable}}` substitution with validation and live preview
+- **📋 Git Operations**: Automated repository management, PR creation, and status tracking
+- **⚙️ Settings Management**: Git-based configuration storage with version control
+- **💬 Conversation Management**: Multi-turn dialogues with System/User/Assistant role support
+- **🧠 Thought Extraction**: Automatic detection and display of model reasoning process
+- **🎯 Visual Promotion Pipeline**: Interactive Test → Production workflow with approval gates
+- **📈 Performance Analytics**: Response time tracking, error monitoring, and success metrics
+- **📊 Dataset Integration**: HuggingFace dataset support for evaluation and batch processing
 
 ## License
 

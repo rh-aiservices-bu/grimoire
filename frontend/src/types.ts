@@ -20,7 +20,7 @@ export interface PromptHistory {
   top_p?: number;
   top_k?: number;
   response?: string;
-  rating?: string;
+  rating?: boolean | null;
   notes?: string;
   is_prod?: boolean;
   has_merged_pr?: boolean;
@@ -70,4 +70,10 @@ export interface PendingPR {
   pr_number: number;
   is_merged: boolean;
   created_at: string;
+}
+
+export interface PromotionStatus {
+  currentTest?: PromptHistory;
+  currentProd?: PromptHistory;
+  pendingPRs: PendingPR[];
 }

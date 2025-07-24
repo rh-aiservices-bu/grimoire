@@ -298,6 +298,7 @@ export const PlaygroundPage: React.FC<PlaygroundPageProps> = ({
                     </div>
                     <div style={{ flex: 1 }}>
                       <TextArea
+                        id={`message-${message.id}`}
                         value={message.content}
                         onChange={(_event, value) => updateMessage(message.id, 'content', value)}
                         rows={3}
@@ -553,6 +554,7 @@ export const PlaygroundPage: React.FC<PlaygroundPageProps> = ({
               Use handlebars in your prompt to add a variable (&#123;&#123;exampleVariable&#125;&#125;).
             </div>
             <TextArea
+              id="playground-variables"
               value={variableInput}
               onChange={(_event, value) => handleVariableInputChange(value)}
               rows={Object.keys(variables).length > 0 ? 4 : 3}
