@@ -59,11 +59,19 @@ export const PromptHistoryPage: React.FC<PromptHistoryPageProps> = ({
   const [showTestConfirmModal, setShowTestConfirmModal] = useState(false);
   const [showProdConfirmModal, setShowProdConfirmModal] = useState(false);
   const [confirmationPrompt, setConfirmationPrompt] = useState<PromptHistory | null>(null);
+  
 
   useEffect(() => {
     loadHistory();
-    loadGitAuthStatus();
+    // Load git auth status in background - don't block UI
+    setTimeout(() => {
+      loadGitAuthStatus();
+    }, 200);
   }, [project.id]);
+
+  const refreshData = async () => {
+    await loadHistory();
+  };
 
   const loadHistory = async () => {
     try {
@@ -74,13 +82,17 @@ export const PromptHistoryPage: React.FC<PromptHistoryPageProps> = ({
       const historyData = await api.getPromptHistory(project.id);
       setHistory(historyData);
       
-      // Load promotion status
-      await loadPromotionStatus(historyData);
-      
       // Auto-select the first prompt if available
       if (historyData.length > 0) {
         setSelectedPrompt(historyData[0]);
       }
+      
+      // Load promotion status in background - don't block UI rendering
+      loadPromotionStatus(historyData).catch(err => {
+        console.warn('Failed to load promotion status:', err);
+      });
+
+      
     } catch (err) {
       console.error('Failed to load history:', err);
       if (onNotification) {
@@ -99,57 +111,74 @@ export const PromptHistoryPage: React.FC<PromptHistoryPageProps> = ({
     try {
       // IMPORTANT: Backend naming is confusing!
       // - is_prod = True in PromptHistory actually means "current test" (not production!)
-      // Note: No longer need to filter negative IDs since duplicate cards were removed from backend
       const currentTest = historyData.find(p => p.is_prod); // is_prod actually means "current test"!
       
-      // Use existing backend bulk sync functionality to ensure all Git data is current
-      try {
-        console.log('Syncing all Git projects using existing backend sync...');
-        await api.syncAllGitProjects();
-        console.log('Git sync completed');
-      } catch (syncErr) {
-        console.warn('Failed to sync all Git projects:', syncErr);
-        // Still try individual sync methods as fallback
-        try {
-          await api.syncPRStatus(project.id);
-        } catch (prSyncErr) {
-          console.warn('Failed to sync PR status during load:', prSyncErr);
-        }
-      }
-      
-      // Load pending PRs (now synced with Git)
+      // Load basic PR data first (fast)
       const pendingPRs = await api.getPendingPRs(project.id);
+      console.log('Loaded pending PRs:', pendingPRs);
       
-      // Get production status from Git (this endpoint has automatic sync with rate limiting)
-      let currentProd: PromptHistory | undefined;
-      try {
-        const prodHistory = await api.getProdHistoryFromGit(project.id);
-        if (prodHistory && prodHistory.length > 0) {
-          // Find the most recent production prompt from Git
-          const latestProdGit = prodHistory[0]; // Backend returns sorted by date desc
-          currentProd = historyData.find(p => 
-            p.id === latestProdGit.prompt_history_id || 
-            (p.user_prompt === latestProdGit.user_prompt && p.system_prompt === latestProdGit.system_prompt)
-          );
-        }
-      } catch (gitErr) {
-        console.warn('Failed to load production history from Git:', gitErr);
-        // Fallback: determine from merged PRs
-        const mergedPRs = pendingPRs.filter((pr: any) => pr.is_merged);
-        if (mergedPRs.length > 0) {
-          const latestMergedPR = mergedPRs[0];
-          currentProd = historyData.find(p => p.id === latestMergedPR.prompt_history_id);
-        }
-      }
+      const filteredPendingPRs = pendingPRs.filter((pr: any) => !pr.is_merged);
       
+      // Set initial state with basic data - UI renders immediately
       setPromotionStatus({
-        currentProd,
+        currentProd: undefined, // Will be populated later
         currentTest,
-        pendingPRs: pendingPRs.filter((pr: any) => !pr.is_merged) // Only show unmerged PRs as pending
+        pendingPRs: filteredPendingPRs
       });
-    } catch (err) {
-      console.error('Failed to load promotion status:', err);
-      // Don't show error notification for this, as it's supplementary
+      
+      // Background operations - don't block UI
+      setTimeout(async () => {
+        try {
+          // Sync operations in background
+          api.syncPRStatus(project.id).catch(err => 
+            console.warn('Background PR sync failed:', err)
+          );
+          api.syncAllGitProjects().catch(err => 
+            console.warn('Background bulk sync failed:', err)
+          );
+          
+          // Get production status from Git
+          let currentProd: PromptHistory | undefined;
+          try {
+            const prodHistory = await api.getProdHistoryFromGit(project.id);
+            if (prodHistory && prodHistory.length > 0) {
+              const latestProdGit = prodHistory[0];
+              currentProd = historyData.find(p => 
+                p.id === latestProdGit.prompt_history_id || 
+                (p.user_prompt === latestProdGit.user_prompt && p.system_prompt === latestProdGit.system_prompt)
+              );
+            }
+          } catch (gitErr) {
+            console.warn('Failed to load production history from Git:', gitErr);
+            // Fallback: determine from merged PRs
+            const mergedPRs = pendingPRs.filter((pr: any) => pr.is_merged);
+            if (mergedPRs.length > 0) {
+              const latestMergedPR = mergedPRs[0];
+              currentProd = historyData.find(p => p.id === latestMergedPR.prompt_history_id);
+            }
+          }
+          
+          // Update with production data once available
+          if (currentProd) {
+            setPromotionStatus(prev => ({
+              ...prev,
+              currentProd
+            }));
+          }
+        } catch (error) {
+          console.warn('Background status update failed:', error);
+        }
+      }, 100); // Small delay to let UI render first
+      
+    } catch (error) {
+      console.error('Failed to load basic promotion status:', error);
+      // Still set minimal state so UI works
+      const currentTest = historyData.find(p => p.is_prod);
+      setPromotionStatus({
+        currentProd: undefined,
+        currentTest,
+        pendingPRs: []
+      });
     }
   };
 
@@ -216,8 +245,17 @@ export const PromptHistoryPage: React.FC<PromptHistoryPageProps> = ({
           actionLinks: result.commit_url ? [{ text: 'View Commit', url: result.commit_url }] : []
         });
       }
-      // Reload to get updated status (sync happens in loadPromotionStatus)
-      await loadHistory();
+      // Force sync PR status immediately after creating PR
+      try {
+        console.log('Forcing PR sync after test promotion...');
+        await api.syncPRStatus(project.id);
+        console.log('PR sync completed after test promotion');
+      } catch (syncErr) {
+        console.warn('Failed to sync PRs after test promotion:', syncErr);
+      }
+      
+      // Reload to get updated status - force refresh since we made changes
+      await refreshData();
     } catch (err: any) {
       console.error('Failed to promote to test:', err);
       let errorMessage = 'Failed to promote prompt to test';
@@ -272,8 +310,17 @@ export const PromptHistoryPage: React.FC<PromptHistoryPageProps> = ({
           actionLinks: result.pr_url ? [{ text: 'View PR', url: result.pr_url }] : []
         });
       }
-      // Reload to get updated status (sync happens in loadPromotionStatus)
-      await loadHistory();
+      // Force sync PR status immediately after creating PR
+      try {
+        console.log('Forcing PR sync after production promotion...');
+        await api.syncPRStatus(project.id);
+        console.log('PR sync completed after production promotion');
+      } catch (syncErr) {
+        console.warn('Failed to sync PRs after production promotion:', syncErr);
+      }
+      
+      // Reload to get updated status - force refresh since we made changes
+      await refreshData();
     } catch (err: any) {
       console.error('Failed to promote to production:', err);
       let errorMessage = 'Failed to create production pull request';
@@ -346,11 +393,22 @@ export const PromptHistoryPage: React.FC<PromptHistoryPageProps> = ({
           borderBottom: '1px solid #d0d0d0',
           backgroundColor: '#f8f9fa'
         }}>
-          <Title headingLevel="h3" size="md" style={{ margin: 0 }}>
-            Prompts History
-          </Title>
-          <div style={{ color: '#666', fontSize: '0.875rem', marginTop: '0.25rem' }}>
-            {history.length} {history.length === 1 ? 'prompt' : 'prompts'}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <Title headingLevel="h3" size="md" style={{ margin: 0 }}>
+                Prompts History
+              </Title>
+              <div style={{ color: '#666', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+                {history.length} {history.length === 1 ? 'prompt' : 'prompts'}
+              </div>
+            </div>
+            <Button 
+              variant="link" 
+              onClick={refreshData}
+              style={{ padding: '0.25rem', minHeight: 'auto' }}
+            >
+              🔄
+            </Button>
           </div>
         </div>
 
@@ -441,12 +499,21 @@ export const PromptHistoryPage: React.FC<PromptHistoryPageProps> = ({
                           )}
                           {/* Pending PR Badge */}
                           {promotionStatus.pendingPRs.some(pr => pr.prompt_history_id === item.id) && (
-                            <Badge variant="outline" style={{ 
-                              color: '#0066cc', 
-                              borderColor: '#0066cc',
-                              fontSize: '0.6rem'
+                            <Badge style={{ 
+                              backgroundColor: '#f0f7ff',
+                              color: '#0066cc',
+                              border: '1px solid #bee5eb',
+                              fontSize: '0.65rem',
+                              fontWeight: 600,
+                              padding: '0.2rem 0.4rem',
+                              borderRadius: '6px',
+                              minWidth: 'auto',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.25rem'
                             }}>
-                              PR PENDING
+                              <span style={{ fontSize: '0.8rem' }}>📋</span>
+                              Pull Request
                             </Badge>
                           )}
                           {getRatingIcon(item.rating)}

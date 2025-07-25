@@ -440,11 +440,6 @@ export const api = {
     return response.data;
   },
 
-  // Get Git history
-  getGitHistory: async (projectId: number): Promise<any[]> => {
-    const response = await axios.get(`${getApiBase()}/projects/${projectId}/git-history`);
-    return response.data;
-  },
 
   // Test Git repository access
   testGitRepoAccess: async (projectId: number): Promise<{ message: string; accessible: boolean }> => {

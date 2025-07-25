@@ -1783,27 +1783,55 @@ async def tag_prompt_as_test(
 @app.get("/api/projects/{project_id}/pending-prs", response_model=List[PendingPRResponse], tags=["Git"])
 async def get_pending_prs(project_id: int, db: Session = Depends(get_db)):
     """Get pending pull requests for a project - checks live status from git"""
+    print(f"🔍 get_pending_prs called for project_id: {project_id}")
+    
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
+        print(f"❌ Project {project_id} not found")
         raise HTTPException(status_code=404, detail="Project not found")
     
+    print(f"✅ Found project: {project.name}, git_repo_url: {project.git_repo_url}")
+    
     if not project.git_repo_url:
+        print("❌ No git repo URL configured")
         return []
     
     user = db.query(User).order_by(User.created_at.desc()).first()
     if not user:
+        print("❌ No user found")
         return []
+    
+    print(f"✅ Found user: {user.git_username}, platform: {user.git_platform}, server_url: {user.git_server_url}")
     
     try:
         token = git_service.decrypt_token(user.git_access_token)
+        print(f"✅ Decrypted token successfully")
         
         # Get all PRs for this project from database
         all_prs = db.query(PendingPR).filter(
             PendingPR.project_id == project_id
         ).order_by(PendingPR.created_at.desc()).all()
         
+        print(f"🔍 Found {len(all_prs)} PRs in database for project {project_id}")
+        for pr in all_prs:
+            print(f"   PR #{pr.pr_number}: {pr.pr_url}, is_merged: {pr.is_merged}, created_at: {pr.created_at}")
+        
+        # If no PRs in database, return empty list immediately
+        if not all_prs:
+            print("🔍 No PRs found in database, returning empty list")
+            return []
+        
         pending_prs = []
         for pr in all_prs:
+            # Skip if already marked as merged
+            if pr.is_merged:
+                print(f"🔍 PR #{pr.pr_number} already marked as merged, skipping")
+                continue
+                
+            print(f"🔍 Checking status for PR #{pr.pr_number} with platform: {user.git_platform}")
+            print(f"🔍 Repository URL: {project.git_repo_url}")
+            print(f"🔍 User server URL: {user.git_server_url}")
+            
             # Check live status from git
             status = git_service.check_pr_status(
                 user.git_platform,
@@ -1812,19 +1840,48 @@ async def get_pending_prs(project_id: int, db: Session = Depends(get_db)):
                 pr.pr_number
             )
             
+            print(f"🔍 PR #{pr.pr_number} status returned: {status}")
+            
+            # If we couldn't get status (None), assume it's still open to be safe
+            if status is None:
+                print(f"⚠️  Could not check PR #{pr.pr_number} status, assuming it's still open")
+                pending_prs.append(pr)
             # Only include if still open/pending
-            if status == 'open':
+            elif status == 'open':
+                print(f"✅ Including PR #{pr.pr_number} as pending")
                 pending_prs.append(pr)
             # Update database status if changed
-            elif status in ['merged', 'closed'] and not pr.is_merged:
+            elif status in ['merged', 'closed']:
+                print(f"🔄 Marking PR #{pr.pr_number} as merged/closed in database")
                 pr.is_merged = True
+            else:
+                print(f"🔍 PR #{pr.pr_number} excluded - status: {status}, is_merged: {pr.is_merged}")
+        
+        print(f"🔍 Final pending PRs list has {len(pending_prs)} items")
+        for pr in pending_prs:
+            print(f"   Final PR: #{pr.pr_number}, URL: {pr.pr_url}")
         
         db.commit()
         return pending_prs
         
     except Exception as e:
-        print(f"Failed to check pending PRs: {e}")
-        return []
+        print(f"❌ Failed to check pending PRs: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        # Fallback: return all non-merged PRs if git checking fails
+        try:
+            print("🔄 Falling back to database-only check")
+            fallback_prs = db.query(PendingPR).filter(
+                PendingPR.project_id == project_id,
+                PendingPR.is_merged == False
+            ).order_by(PendingPR.created_at.desc()).all()
+            
+            print(f"📋 Returning {len(fallback_prs)} PRs from database fallback")
+            return fallback_prs
+        except Exception as fallback_error:
+            print(f"❌ Fallback also failed: {fallback_error}")
+            return []
 
 @app.post("/api/projects/{project_id}/sync-prs", tags=["Git"])
 async def sync_pr_status(project_id: int, db: Session = Depends(get_db)):

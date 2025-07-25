@@ -760,22 +760,22 @@ class GitService:
         """Check if a PR is merged, closed, or still open"""
         try:
             _, owner, repo = self.parse_git_url(repo_url)
-            api_base = self.get_api_base_url(platform, repo_url)
+            api_base = self.get_api_base_url(platform, None, repo_url)
+            headers = self.get_auth_headers(platform, token)
             
-            headers = {
-                'Authorization': f'token {token}',
-                'Accept': 'application/vnd.github.v3+json' if platform == 'github' else 'application/json'
-            }
+            print(f"🔍 Checking PR status for platform: {platform}")
+            print(f"🔍 Repo: {owner}/{repo}, PR: {pr_number}")
+            print(f"🔍 API Base: {api_base}")
             
             if platform == 'github':
                 pr_url = f"{api_base}/repos/{owner}/{repo}/pulls/{pr_number}"
-                print(f"Checking PR status at: {pr_url}")
+                print(f"🔍 GitHub PR URL: {pr_url}")
                 response = requests.get(pr_url, headers=headers)
-                print(f"PR status response: {response.status_code}")
+                print(f"🔍 GitHub PR status response: {response.status_code}")
                 
                 if response.status_code == 200:
                     pr_data = response.json()
-                    print(f"PR data: merged={pr_data.get('merged')}, state={pr_data.get('state')}")
+                    print(f"🔍 GitHub PR data: merged={pr_data.get('merged')}, state={pr_data.get('state')}")
                     if pr_data.get('merged'):
                         return 'merged'
                     elif pr_data.get('state') == 'closed':
@@ -783,14 +783,69 @@ class GitService:
                     else:
                         return 'open'
                 else:
-                    print(f"Failed to get PR info: {response.text}")
+                    print(f"❌ Failed to get GitHub PR info: {response.text}")
+                    return None
+                    
+            elif platform == 'gitlab':
+                # GitLab uses merge requests (MRs) instead of PRs
+                project_path = f"{owner}%2F{repo}"  # URL-encoded
+                mr_url = f"{api_base}/projects/{project_path}/merge_requests/{pr_number}"
+                print(f"🔍 GitLab MR URL: {mr_url}")
+                response = requests.get(mr_url, headers=headers)
+                print(f"🔍 GitLab MR status response: {response.status_code}")
+                
+                if response.status_code == 200:
+                    mr_data = response.json()
+                    state = mr_data.get('state')
+                    merge_status = mr_data.get('merge_status')
+                    print(f"🔍 GitLab MR data: state={state}, merge_status={merge_status}")
+                    
+                    if state == 'merged':
+                        return 'merged'
+                    elif state == 'closed':
+                        return 'closed'
+                    elif state == 'opened':
+                        return 'open'
+                    else:
+                        return 'open'  # Default to open for unknown states
+                else:
+                    print(f"❌ Failed to get GitLab MR info: {response.text}")
+                    return None
+                    
+            elif platform == 'gitea':
+                pr_url = f"{api_base}/repos/{owner}/{repo}/pulls/{pr_number}"
+                print(f"🔍 Gitea PR URL: {pr_url}")
+                print(f"🔍 Gitea headers: {headers}")
+                response = requests.get(pr_url, headers=headers)
+                print(f"🔍 Gitea PR status response: {response.status_code}")
+                print(f"🔍 Gitea PR response text: {response.text[:500]}...")
+                
+                if response.status_code == 200:
+                    pr_data = response.json()
+                    state = pr_data.get('state')
+                    merged = pr_data.get('merged')
+                    print(f"🔍 Gitea PR data: state={state}, merged={merged}")
+                    print(f"🔍 Full Gitea PR data keys: {list(pr_data.keys())}")
+                    
+                    if merged:
+                        return 'merged'
+                    elif state == 'closed':
+                        return 'closed'
+                    elif state == 'open':
+                        return 'open'
+                    else:
+                        print(f"⚠️  Unknown Gitea PR state: {state}, defaulting to open")
+                        return 'open'  # Default to open for unknown states
+                else:
+                    print(f"❌ Failed to get Gitea PR info: {response.text}")
+                    print(f"❌ Response headers: {response.headers}")
                     return None
             else:
-                # GitLab/Gitea implementation would go here
+                print(f"❌ Unsupported platform: {platform}")
                 return None
                 
         except Exception as e:
-            print(f"Failed to check PR status: {e}")
+            print(f"❌ Failed to check PR status: {e}")
             import traceback
             traceback.print_exc()
             return None
