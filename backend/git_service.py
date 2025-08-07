@@ -1046,16 +1046,28 @@ class GitService:
                     return []
                     
             elif platform == 'gitea':
+                # First try to get all commits, then filter by file if needed
                 commits_url = f"{api_base}/repos/{owner}/{repo}/commits"
                 params = {
-                    'path': file_path,
                     'limit': limit
                 }
-                print(f"🔍 Gitea commits URL: {commits_url}")
-                print(f"🔍 Gitea params: {params}")
                 
-                response = requests.get(commits_url, headers=headers, params=params)
+                # Try with path parameter first
+                params_with_path = params.copy()
+                params_with_path['path'] = file_path
+                
+                print(f"🔍 Gitea commits URL: {commits_url}")
+                print(f"🔍 Gitea params with path: {params_with_path}")
+                
+                response = requests.get(commits_url, headers=headers, params=params_with_path)
                 print(f"🔍 Gitea response status: {response.status_code}")
+                
+                # If path parameter fails, try without it
+                if response.status_code == 404:
+                    print(f"🔍 Path parameter failed, trying without path filter")
+                    response = requests.get(commits_url, headers=headers, params=params)
+                    print(f"🔍 Gitea response status (no path): {response.status_code}")
+                
                 print(f"🔍 Gitea response headers: {dict(response.headers)}")
                 
                 if response.status_code == 200:
