@@ -38,17 +38,22 @@ A comprehensive enterprise-grade web application for experimenting with, testing
 ## Quick Start
 
 ### Prerequisites
-- Python 3.8+, Node.js 18+, npm
+- Python 3.9+, Node.js 18+, npm
 - **Llama Stack server** running with available model providers (e.g., `llama-3.1-8b-instruct`)
 
 ### Development
 ```bash
 # Backend
-cd backend && python3 -m venv myenv && source myenv/bin/activate
-pip install -r requirements.txt && python main.py
+cd backend
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+python main.py
 
 # Frontend (new terminal)  
-cd frontend && npm install && npm run dev
+cd frontend
+npm install
+npm run dev
 ```
 
 Access at http://localhost:5173 (frontend) and http://localhost:3001 (backend API)
@@ -62,11 +67,11 @@ docker-compose up -d
 
 **Container Build:**
 ```bash
-# Standard deployment
-podman build -t grimoire:latest -f Containerfile .
+# Backend container
+cd backend && podman build -t grimoire-backend:latest -f Containerfile .
 
-# Development workbench
-podman build -t grimoire:workbench -f backend/Containerfile.workbench .
+# Frontend container
+cd frontend && podman build -t grimoire-frontend:latest -f Containerfile .
 ```
 
 **Kubernetes:**
@@ -83,10 +88,12 @@ helm install grimoire ./helm --set ingress.enabled=true
 - **POST** `/api/projects/{id}/test-backend` - Test prompts against external backend APIs with streaming
 - **POST** `/api/projects/{id}/eval` - Run automated prompt evaluations with LLM-as-judge scoring
 - **GET** `/api/projects/{id}/test-settings` - Retrieve Git-stored test configurations and variables
+- **GET** `/api/git/quick-status` - Quick Git authentication status check
+- **GET** `/api/projects/{id}/git-changes` - Check Git repository status and pending changes
 
 ### **Interactive Documentation**
 - **📖 Swagger UI**: http://localhost:3001/docs - Interactive API testing with live examples
-- **📚 ReDoc**: http://localhost:3001/redoc - Clean, comprehensive API documentation
+- **📚 ReDoc**: http://localhost:3001/redoc - Clean, comprehensive API documentation  
 - **🔧 OpenAPI Spec**: http://localhost:3001/openapi.json - Machine-readable API specification
 - **🏥 Health Check**: http://localhost:3001/api - OpenShift-compatible health endpoint
 

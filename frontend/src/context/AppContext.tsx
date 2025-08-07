@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, ReactNode, useRef } from 'react';
 import { Project, GitUser } from '../types';
 import { api } from '../api';
 
@@ -104,7 +104,7 @@ const AppContext = createContext<{
   dispatch: React.Dispatch<AppAction>;
   actions: {
     loadProjects: () => Promise<void>;
-    loadGitUser: () => Promise<void>;
+    loadGitUser: (forceRefresh?: boolean) => Promise<void>;
     createProject: (data: {
       name: string;
       llamastackUrl: string;
@@ -127,6 +127,14 @@ const AppContext = createContext<{
 // Provider component
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
+  
+  // Cache for auth status to prevent excessive checks
+  const authStatusCache = useRef<{ 
+    timestamp: number; 
+    authenticated: boolean; 
+    user?: GitUser | null 
+  } | null>(null);
+  const AUTH_CACHE_DURATION = 30000; // 30 seconds cache for auth status
 
   // Actions
   const actions = {
@@ -151,12 +159,51 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     },
 
-    loadGitUser: async () => {
+    loadGitUser: async (forceRefresh: boolean = false) => {
       try {
-        const user = await api.getCurrentGitUser();
+        // Check cache first unless forced refresh
+        if (!forceRefresh && authStatusCache.current) {
+          const now = Date.now();
+          if (now - authStatusCache.current.timestamp < AUTH_CACHE_DURATION) {
+            dispatch({ type: 'SET_GIT_USER', payload: authStatusCache.current.user || null });
+            return;
+          }
+        }
+        
+        // Use instant check for immediate response (just DB lookup)
+        const instantStatus = await api.getInstantGitAuthStatus();
+        const user = instantStatus.authenticated && instantStatus.user ? instantStatus.user as GitUser : null;
+        
+        // Update cache and dispatch immediately
+        authStatusCache.current = {
+          timestamp: Date.now(),
+          authenticated: instantStatus.authenticated,
+          user
+        };
+        
         dispatch({ type: 'SET_GIT_USER', payload: user });
+        
+        // Optional background verification if we have a user (don't await)
+        if (instantStatus.authenticated && !forceRefresh) {
+          api.getQuickGitAuthStatus().then(status => {
+            const verifiedUser = status.authenticated && status.user ? status.user as GitUser : null;
+            authStatusCache.current = {
+              timestamp: Date.now(),
+              authenticated: status.authenticated,
+              user: verifiedUser
+            };
+            dispatch({ type: 'SET_GIT_USER', payload: verifiedUser });
+          }).catch(err => {
+            console.warn('Background git user verification failed:', err);
+          });
+        }
       } catch (error) {
         // No git user authenticated yet, that's fine
+        authStatusCache.current = {
+          timestamp: Date.now(),
+          authenticated: false,
+          user: null
+        };
         dispatch({ type: 'SET_GIT_USER', payload: null });
       }
     },
@@ -215,6 +262,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }) => {
       try {
         const user = await api.authenticateGit(data);
+        
+        // Immediately update auth cache with new authenticated status
+        authStatusCache.current = {
+          timestamp: Date.now(),
+          authenticated: true,
+          user: {
+            git_platform: user.git_platform,
+            git_username: user.git_username,
+            git_server_url: user.git_server_url
+          }
+        };
+        
         dispatch({ type: 'SET_GIT_USER', payload: user });
         dispatch({ type: 'SET_ERROR', payload: '' });
         
@@ -224,6 +283,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           message: `Successfully authenticated as ${user.git_username} on ${user.git_platform}`
         });
       } catch (error) {
+        // Invalidate cache on error too
+        authStatusCache.current = null;
+        
         actions.addNotification({
           title: 'Git Authentication Failed',
           variant: 'danger',

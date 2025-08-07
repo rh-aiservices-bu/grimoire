@@ -1,6 +1,9 @@
 import axios from 'axios';
 import { Project, PromptHistory, BackendTestHistory, GitUser, PendingPR } from './types';
 
+// Configure axios to include cookies with all requests
+axios.defaults.withCredentials = true;
+
 // Runtime API base URL detection
 const getApiBase = (): string => {
   // Use environment variable if set, otherwise detect environment at runtime
@@ -118,6 +121,7 @@ export const api = {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify(data),
       });
 
@@ -207,6 +211,49 @@ export const api = {
     return response.data;
   },
 
+  getQuickGitAuthStatus: async (): Promise<{
+    authenticated: boolean;
+    user?: {
+      username: string;
+      platform: string;
+      server_url?: string;
+    };
+    platform?: string;
+    last_used?: string;
+    cached: boolean;
+    error?: string;
+  }> => {
+    const response = await axios.get(`${getApiBase()}/git/quick-status`);
+    return response.data;
+  },
+
+  // Ultra-fast auth check - just checks if user exists in DB (no API calls)
+  getInstantGitAuthStatus: async (): Promise<{
+    authenticated: boolean;
+    user?: {
+      username: string;
+      platform: string;
+      server_url?: string;
+    };
+  }> => {
+    try {
+      const user = await api.getCurrentGitUser();
+      return {
+        authenticated: !!user,
+        user: user ? {
+          username: user.git_username,
+          platform: user.git_platform,
+          server_url: user.git_server_url
+        } : undefined
+      };
+    } catch (error) {
+      return {
+        authenticated: false,
+        user: undefined
+      };
+    }
+  },
+
   // Git operations
   tagPromptAsProd: async (projectId: number, historyId: number): Promise<{
     message: string;
@@ -279,6 +326,7 @@ export const api = {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify(data),
       });
 
@@ -450,6 +498,24 @@ export const api = {
   // Sync all Git projects (uses existing backend bulk sync)
   syncAllGitProjects: async (): Promise<{ message: string; results: any[] }> => {
     const response = await axios.post(`${getApiBase()}/git/sync-all`);
+    return response.data;
+  },
+
+  // Check if git repository has changes since last sync (lightweight check)
+  checkGitChanges: async (projectId: number): Promise<{
+    has_changes: boolean;
+    current_commit?: string;
+    last_known_commit?: string;
+    reason: string;
+    error?: string;
+  }> => {
+    const response = await axios.get(`${getApiBase()}/projects/${projectId}/git-changes`);
+    return response.data;
+  },
+
+  // Clear PR cache for a project (useful for troubleshooting stale PR status)
+  clearPRCache: async (projectId: number): Promise<{ message: string }> => {
+    const response = await axios.post(`${getApiBase()}/projects/${projectId}/clear-pr-cache`);
     return response.data;
   },
 };

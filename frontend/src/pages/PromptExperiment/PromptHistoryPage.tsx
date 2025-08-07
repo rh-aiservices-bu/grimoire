@@ -67,6 +67,11 @@ export const PromptHistoryPage: React.FC<PromptHistoryPageProps> = ({
     setTimeout(() => {
       loadGitAuthStatus();
     }, 200);
+    
+    // Sync PR status after initial load
+    setTimeout(() => {
+      syncPRStatus();
+    }, 1000); // Small delay to let auth status load first
   }, [project.id]);
 
   const refreshData = async () => {
@@ -184,11 +189,32 @@ export const PromptHistoryPage: React.FC<PromptHistoryPageProps> = ({
 
   const loadGitAuthStatus = async () => {
     try {
-      const status = await api.getGitAuthStatus();
-      setGitAuthStatus(status);
+      // Use the instant check which is just a DB lookup - fast and reliable
+      const status = await api.getInstantGitAuthStatus();
+      setGitAuthStatus({
+        authenticated: status.authenticated,
+        user: status.user
+      });
     } catch (err) {
       console.error('Failed to load git auth status:', err);
       setGitAuthStatus({ authenticated: false });
+    }
+  };
+
+  // Simple sync that caches results and only syncs when needed
+  const syncPRStatus = async (force: boolean = false) => {
+    // Don't sync if we don't have git repo or authentication
+    if (!project.git_repo_url || !gitAuthStatus.authenticated) {
+      return;
+    }
+    
+    try {  
+      console.log('🔄 Syncing PR status...');
+      await api.syncPRStatus(project.id);
+      await refreshData();
+      console.log('✅ PR sync completed');
+    } catch (err) {
+      console.warn('PR sync failed:', err);
     }
   };
 
@@ -245,17 +271,8 @@ export const PromptHistoryPage: React.FC<PromptHistoryPageProps> = ({
           actionLinks: result.commit_url ? [{ text: 'View Commit', url: result.commit_url }] : []
         });
       }
-      // Force sync PR status immediately after creating PR
-      try {
-        console.log('Forcing PR sync after test promotion...');
-        await api.syncPRStatus(project.id);
-        console.log('PR sync completed after test promotion');
-      } catch (syncErr) {
-        console.warn('Failed to sync PRs after test promotion:', syncErr);
-      }
-      
-      // Reload to get updated status - force refresh since we made changes
-      await refreshData();
+      // Sync status after promotion
+      setTimeout(() => syncPRStatus(true), 1000);
     } catch (err: any) {
       console.error('Failed to promote to test:', err);
       let errorMessage = 'Failed to promote prompt to test';
@@ -310,17 +327,9 @@ export const PromptHistoryPage: React.FC<PromptHistoryPageProps> = ({
           actionLinks: result.pr_url ? [{ text: 'View PR', url: result.pr_url }] : []
         });
       }
-      // Force sync PR status immediately after creating PR
-      try {
-        console.log('Forcing PR sync after production promotion...');
-        await api.syncPRStatus(project.id);
-        console.log('PR sync completed after production promotion');
-      } catch (syncErr) {
-        console.warn('Failed to sync PRs after production promotion:', syncErr);
-      }
       
-      // Reload to get updated status - force refresh since we made changes
-      await refreshData();
+      // Sync status after promotion
+      setTimeout(() => syncPRStatus(true), 1000);
     } catch (err: any) {
       console.error('Failed to promote to production:', err);
       let errorMessage = 'Failed to create production pull request';

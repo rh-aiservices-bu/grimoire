@@ -40,6 +40,7 @@ class Project(Base):
     provider_id = Column(String, nullable=False)
     git_repo_url = Column(String, nullable=True)
     test_backend_url = Column(String, nullable=True)
+    last_git_sync_commit = Column(String, nullable=True)  # Last commit hash when PR status was synced
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     # Relationship to prompt history

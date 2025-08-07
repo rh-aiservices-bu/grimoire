@@ -94,6 +94,35 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
     }
   };
 
+  const handlePageChange = async (page: NavigationPage) => {
+    // Always allow page change
+    setCurrentPage(page);
+    
+    // Show auth status info for prompts view (non-blocking)
+    if (page === 'prompt') {
+      try {
+        const authStatus = await api.getQuickGitAuthStatus();
+        if (!authStatus.authenticated) {
+          if (onNotification) {
+            onNotification({
+              title: 'Git Authentication Status',
+              variant: 'info',
+              message: 'Not authenticated with Git. Some features may be limited.',
+              actionButton: onGitAuth ? { 
+                text: 'Authenticate', 
+                onClick: onGitAuth 
+              } : undefined
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Auth check failed:', error);
+        // Don't show error notifications for failed auth checks
+        // since this is just informational
+      }
+    }
+  };
+
   const renderCurrentPage = () => {
     switch (currentPage) {
       case 'playground':
@@ -142,7 +171,7 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
       {/* Left Navigation */}
       <LeftNavigation
         activePage={currentPage}
-        onPageChange={setCurrentPage}
+        onPageChange={handlePageChange}
         projectName={currentProject.name}
       />
 

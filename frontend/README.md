@@ -4,14 +4,14 @@ A modern, enterprise-grade React application built with TypeScript, Vite, and Pa
 
 ## 🚀 Technology Stack
 
-- **⚛️ Framework**: React 18.3.1 with TypeScript 5.8+ for type-safe development
-- **⚡ Build Tool**: Vite 7.0+ with optimized builds, HMR, and advanced chunk splitting
-- **🎨 UI Library**: PatternFly 6.2+ (Red Hat Design System) for enterprise-ready components
+- **⚛️ Framework**: React 18.3.1 with TypeScript 5.8.3 for type-safe development
+- **⚡ Build Tool**: Vite 7.0.4 with optimized builds, HMR, and advanced chunk splitting
+- **🎨 UI Library**: PatternFly 6.2.3 (Red Hat Design System) for enterprise-ready components
 - **💅 Styling**: PatternFly CSS with custom overrides and utility classes
 - **🗃️ State Management**: React Context API with useReducer for predictable state transitions
-- **🌐 HTTP Client**: Axios for REST APIs with Server-Sent Events for real-time streaming
-- **🧭 Routing**: React Router 6.28+ for client-side navigation with protected routes
-- **🧪 Testing**: Vitest + React Testing Library + Coverage reporting with JSDOM
+- **🌐 HTTP Client**: Axios 1.10.0 for REST APIs with Server-Sent Events for real-time streaming
+- **🧭 Routing**: React Router 6.28.0 for client-side navigation with protected routes
+- **🧪 Testing**: Vitest 3.0.1 + React Testing Library 16.1.0 + Coverage reporting with JSDOM
 - **🔧 Development**: Hot Module Replacement with React Fast Refresh and proxy configuration
 
 ## 🎯 Features
@@ -72,8 +72,8 @@ A modern, enterprise-grade React application built with TypeScript, Vite, and Pa
 ## Development Setup
 
 ### Prerequisites
-- Node.js 18+
-- npm or yarn
+- Node.js 18+ (recommended: Node.js 20+)
+- npm or yarn package manager
 
 ### Installation
 ```bash
@@ -175,7 +175,7 @@ frontend/
 ### Environment Variables
 Create a `.env` file in the frontend directory:
 ```env
-VITE_API_URL=http://localhost:3001
+VITE_BACKEND_URL=http://localhost:3001
 ```
 
 ### TypeScript Configuration
@@ -216,6 +216,7 @@ The frontend implements sophisticated communication patterns with the backend:
 - **Integration Ready**: RESTful endpoints designed for external system integration with comprehensive documentation
 - **Backend Testing Integration**: External API testing endpoints with streaming response validation and performance analytics
 - **Evaluation APIs**: LLM-as-judge evaluation system with dataset integration and batch processing capabilities
+- **Git Status APIs**: Quick authentication status checking and repository change monitoring
 
 ## Container Support
 
@@ -231,7 +232,7 @@ podman run -p 3000:80 grimoire-frontend:dev
 # Multi-stage production build
 podman build -t grimoire-frontend:prod -f Containerfile .
 
-# Run with custom backend URL
+# Build with custom backend URL
 podman build --build-arg VITE_BACKEND_URL=https://api.example.com -t grimoire-frontend:prod .
 ```
 

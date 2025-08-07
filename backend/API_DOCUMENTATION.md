@@ -1,6 +1,6 @@
 # Grimoire - AI Prompt Experimentation Platform API Documentation
 
-A comprehensive FastAPI-based backend service providing advanced prompt experimentation, evaluation, and production deployment capabilities with multi-platform Git integration and real-time streaming support.
+A comprehensive FastAPI-based backend service providing advanced prompt experimentation, evaluation, and production deployment capabilities with multi-platform Git integration and real-time streaming support. Built with Python 3.9+ and modern async architecture.
 
 ## 🌐 Interactive Documentation
 
@@ -266,6 +266,42 @@ curl -X POST http://localhost:3001/api/projects/1/backend-history/1/tag-test \
   }'
 ```
 
+### 8.4. Check Git Repository Changes
+```bash
+curl http://localhost:3001/api/projects/1/git-changes
+```
+
+**Response Example:**
+```json
+{
+  "has_changes": true,
+  "modified_files": ["prompt.json", "settings.json"],
+  "untracked_files": ["new_config.json"],
+  "branch": "main",
+  "last_commit": "a1b2c3d"
+}
+```
+
+### 8.5. Clear Pull Request Cache
+```bash
+curl -X POST http://localhost:3001/api/projects/1/clear-pr-cache
+```
+
+### 8.6. Quick Git Authentication Status
+```bash
+curl http://localhost:3001/api/git/quick-status
+```
+
+**Response Example:**
+```json
+{
+  "authenticated": true,
+  "platform": "github",
+  "username": "your-username",
+  "last_validated": "2024-01-15T10:30:00Z"
+}
+```
+
 ## 📋 Key External API Endpoints
 
 ### **Projects and Models Discovery**
@@ -418,7 +454,9 @@ Help me debug this Python code: def factorial(n):
 ### Starting the Server
 ```bash
 cd backend
-source myenv/bin/activate
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
 python main.py
 ```
 
@@ -434,7 +472,7 @@ Once the server is running:
 ```python
 import requests
 
-# Optional: Authenticate with git for production workflow
+# Optional: Authenticate with Git for production workflow
 git_auth = {
     "platform": "github",
     "username": "your-username", 
@@ -616,6 +654,7 @@ data: {"type": "done", "response_time": 1.23}
 - **GET** `/` - API overview and documentation home with feature summary
 - **GET** `/api` - OpenShift-compatible health check endpoint with detailed status
 - **GET** `/api/debug/projects` - Development debugging with project relationships and database state
+- **GET** `/api/git/quick-status` - Quick Git authentication status check with minimal response time
 
 ### **📁 Project Management**
 - **GET** `/api/projects` - List all projects with Git integration status and model information
@@ -651,6 +690,8 @@ data: {"type": "done", "response_time": 1.23}
 - **POST** `/api/projects/{project_id}/git/test-access` - Test Git repository access and permissions
 - **GET** `/api/projects/{project_id}/pending-prs` - Get pending pull requests with live status updates
 - **POST** `/api/projects/{project_id}/sync-prs` - Sync PR statuses from Git platforms with caching
+- **GET** `/api/projects/{project_id}/git-changes` - Check for Git repository changes and uncommitted files
+- **POST** `/api/projects/{project_id}/clear-pr-cache` - Clear pull request cache for immediate status refresh
 - **GET** `/api/projects/{project_id}/prod-history` - Get production history from Git commits with metadata
 - **GET** `/api/projects/{project_id}/git-history` - Get unified Git history with commit details and timestamps
 

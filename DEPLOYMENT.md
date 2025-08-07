@@ -46,7 +46,7 @@ docker-compose up --build
 #### Backend
 ```bash
 cd backend
-python -m venv venv
+python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 python main.py
@@ -67,12 +67,12 @@ npm run dev
 ```bash
 # Build
 cd backend
-docker build -t grimoire-backend -f Containerfile .
+podman build -t grimoire-backend -f Containerfile .
 
 # Run
-docker run -p 3001:3001 \
+podman run -p 3001:3001 \
   -v grimoire_data:/app/data \
-  -e DATABASE_URL=sqlite:///data/grimoire.db \
+  -e DATABASE_URL=sqlite:///app/data/grimoire.db \
   grimoire-backend
 ```
 
@@ -81,12 +81,12 @@ docker run -p 3001:3001 \
 ```bash
 # Build
 cd frontend
-docker build -t grimoire-frontend \
+podman build -t grimoire-frontend \
   --build-arg VITE_BACKEND_URL=http://your-backend-url:3001 \
   -f Containerfile .
 
 # Run
-docker run -p 80:80 grimoire-frontend
+podman run -p 80:80 grimoire-frontend
 ```
 
 ## Kubernetes Deployment
@@ -115,7 +115,7 @@ spec:
         - containerPort: 3001
         env:
         - name: DATABASE_URL
-          value: "sqlite:///data/grimoire.db"
+          value: "sqlite:///app/data/grimoire.db"
         volumeMounts:
         - name: data
           mountPath: /app/data
@@ -256,7 +256,7 @@ spec:
 ## 🗃️ Database & Persistence
 
 ### **Database Options**
-- **SQLite** (default): File-based database with persistent volume support at `/app/data`
+- **SQLite** (default): File-based database with persistent volume support at `/app/data/grimoire.db`
 - **PostgreSQL**: Enterprise database support via SQLAlchemy (configure `DATABASE_URL`)
 - **MySQL**: Alternative enterprise database option with full feature support
 
