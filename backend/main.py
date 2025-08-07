@@ -1434,7 +1434,7 @@ async def logout_git(request: Request, response: Response):
     return {"message": "Successfully logged out"}
 
 @app.post("/api/projects/{project_id}/git/test-access", tags=["Git"])
-async def test_git_repo_access(project_id: int, db: Session = Depends(get_db)):
+async def test_git_repo_access(project_id: int, request: Request, db: Session = Depends(get_db)):
     """Test if current user has access to project's git repository"""
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
@@ -1443,13 +1443,17 @@ async def test_git_repo_access(project_id: int, db: Session = Depends(get_db)):
     if not project.git_repo_url:
         raise HTTPException(status_code=400, detail="Project has no git repository configured")
     
-    user = db.query(User).order_by(User.created_at.desc()).first()  # In production, get from session
-    if not user:
-        raise HTTPException(status_code=404, detail="No authenticated git user found")
+    user_creds = get_user_credentials(request, db)
+    if not user_creds:
+        raise HTTPException(status_code=401, detail="Git authentication required")
     
     try:
-        token = git_service.decrypt_token(user.git_access_token)
-        has_access = git_service.test_git_access(user.git_platform, user.git_username, token, project.git_repo_url)
+        has_access = git_service.test_git_access(
+            user_creds['platform'], 
+            user_creds['username'], 
+            user_creds['access_token'], 
+            project.git_repo_url
+        )
         
         if not has_access:
             raise HTTPException(status_code=403, detail="No access to git repository")
@@ -1462,6 +1466,7 @@ async def test_git_repo_access(project_id: int, db: Session = Depends(get_db)):
 async def tag_prompt_as_prod(
     project_id: int,
     history_id: int,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Tag a prompt as production - creates git PR instead of direct database update"""
@@ -1482,14 +1487,14 @@ async def tag_prompt_as_prod(
     if not project.git_repo_url:
         raise HTTPException(status_code=400, detail="Project has no git repository configured")
     
-    # Get current user (most recently authenticated)
-    user = db.query(User).order_by(User.created_at.desc()).first()  # In production, get from session
-    if not user:
-        raise HTTPException(status_code=404, detail="No authenticated git user found")
+    # Get current user credentials from session or database
+    user_creds = get_user_credentials(request, db)
+    if not user_creds:
+        raise HTTPException(status_code=401, detail="Git authentication required")
     
     try:
         # All platforms now support PR creation
-        print(f"Creating production PR for platform: {user.git_platform}")
+        print(f"Creating production PR for platform: {user_creds['platform']}")
         
         # Prepare prompt data
         variables = None
@@ -1511,14 +1516,9 @@ async def tag_prompt_as_prod(
         )
         
         # Create PR
-        try:
-            token = git_service.decrypt_token(user.git_access_token)
-        except Exception as decrypt_error:
-            print(f"❌ Failed to decrypt git token: {decrypt_error}")
-            raise HTTPException(status_code=401, detail="Git authentication expired or invalid. Please re-authenticate with git.")
         pr_result = git_service.create_prompt_pr(
-            user.git_platform,
-            token,
+            user_creds['platform'],
+            user_creds['access_token'],
             project.git_repo_url,
             project.name,
             project.provider_id,
@@ -1765,6 +1765,7 @@ async def tag_backend_test_as_prod(
 async def tag_prompt_as_test(
     project_id: int,
     history_id: int,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Tag a prompt as test - creates git commit instead of direct database update"""
@@ -1796,10 +1797,10 @@ async def tag_prompt_as_test(
     if not project.git_repo_url:
         raise HTTPException(status_code=400, detail="Project has no git repository configured")
     
-    # Get current user (most recently authenticated)
-    user = db.query(User).order_by(User.created_at.desc()).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="No authenticated git user found")
+    # Get current user credentials from session or database
+    user_creds = get_user_credentials(request, db)
+    if not user_creds:
+        raise HTTPException(status_code=401, detail="Git authentication required")
     
     try:
         # Prepare test prompt data
@@ -1822,20 +1823,15 @@ async def tag_prompt_as_test(
             "created_at": history_item.created_at.isoformat()
         }
         
-        print(f"🔍 tag_prompt_as_test: user platform={user.git_platform}")
+        print(f"🔍 tag_prompt_as_test: user platform={user_creds['platform']}")
         print(f"🔍 tag_prompt_as_test: repo_url={project.git_repo_url}")
         print(f"🔍 tag_prompt_as_test: project_name={project.name}")
         print(f"🔍 tag_prompt_as_test: settings_data={settings_data}")
         
         # Save test settings to git
-        try:
-            token = git_service.decrypt_token(user.git_access_token)
-        except Exception as decrypt_error:
-            print(f"❌ Failed to decrypt git token: {decrypt_error}")
-            raise HTTPException(status_code=401, detail="Git authentication expired or invalid. Please re-authenticate with git.")
         result = git_service.save_test_settings_to_git(
-            user.git_platform,
-            token,
+            user_creds['platform'],
+            user_creds['access_token'],
             project.git_repo_url,
             project.name,
             project.provider_id,
@@ -1996,7 +1992,7 @@ async def sync_pr_status(project_id: int, request: Request, db: Session = Depend
             print(f"Checking PR #{pr.pr_number} status...")
             # Force refresh to ensure we get fresh status (bypass cache)
             status = git_service.check_pr_status(
-                user.git_platform,
+                user['platform'],
                 token,
                 project.git_repo_url,
                 pr.pr_number,
@@ -2012,7 +2008,7 @@ async def sync_pr_status(project_id: int, request: Request, db: Session = Depend
         # Update the last sync commit hash after successful sync
         try:
             current_commit = git_service.get_repository_head_commit(
-                user.git_platform, token, project.git_repo_url
+                user['platform'], token, project.git_repo_url
             )
             if current_commit:
                 project.last_git_sync_commit = current_commit
@@ -2086,7 +2082,7 @@ async def clear_pr_cache(project_id: int, db: Session = Depends(get_db)):
         print(f"Failed to clear PR cache: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-async def sync_git_commits_for_project(project_id: int, db: Session, user: User) -> None:
+async def sync_git_commits_for_project(project_id: int, db: Session, user_creds: dict) -> None:
     """Incrementally sync git commits for a project"""
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project or not project.git_repo_url:
@@ -2097,11 +2093,11 @@ async def sync_git_commits_for_project(project_id: int, db: Session, user: User)
         print(f"   Project name: {project.name}")
         print(f"   Provider ID: {project.provider_id}")
         print(f"   Git repo: {project.git_repo_url}")
-        print(f"   User platform: {user['platform']}")
+        print(f"   User platform: {user_creds['platform']}")
         
         print(f"🔐 Using session token...")
         try:
-            token = user['access_token']
+            token = user_creds['access_token']
             print(f"🔐 Token decrypted successfully")
         except Exception as decrypt_error:
             print(f"❌ Token decryption failed: {decrypt_error}")
@@ -2117,7 +2113,7 @@ async def sync_git_commits_for_project(project_id: int, db: Session, user: User)
         print(f"🔍 Calling get_file_commit_history...")
         try:
             commits = git_service.get_file_commit_history(
-                user['platform'],
+                user_creds['platform'],
                 token,
                 project.git_repo_url,
                 file_path,
@@ -2146,7 +2142,7 @@ async def sync_git_commits_for_project(project_id: int, db: Session, user: User)
                 # This is a new commit, fetch its content and cache it
                 try:
                     prompt_data = git_service.get_file_content_at_commit(
-                        user.git_platform,
+                        user_creds['platform'],
                         token,
                         project.git_repo_url,
                         file_path,
