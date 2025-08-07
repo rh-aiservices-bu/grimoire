@@ -1,12 +1,16 @@
-# Grimoire - Prompt Experimentation Tool API Documentation
+# Grimoire - AI Prompt Experimentation Platform API Documentation
+
+A comprehensive FastAPI-based backend service providing advanced prompt experimentation, evaluation, and production deployment capabilities with multi-platform Git integration and real-time streaming support. Built with Python 3.9+ and modern async architecture.
 
 ## 🌐 Interactive Documentation
 
 The API provides comprehensive interactive documentation through multiple interfaces:
 
-- **Swagger UI**: http://localhost:3001/docs - Interactive testing interface
-- **ReDoc**: http://localhost:3001/redoc - Clean documentation interface  
-- **OpenAPI JSON**: http://localhost:3001/openapi.json - Raw specification
+- **📖 Swagger UI**: http://localhost:3001/docs - Interactive testing interface with live examples and authentication
+- **📚 ReDoc**: http://localhost:3001/redoc - Clean, mobile-friendly documentation with detailed schemas
+- **🔧 OpenAPI JSON**: http://localhost:3001/openapi.json - Machine-readable OpenAPI 3.0 specification
+- **🏥 Health Check**: http://localhost:3001/api - OpenShift-compatible health endpoint with status information
+- **🔍 Debug**: http://localhost:3001/api/debug/projects - Development debugging information with project relationships
 
 ## 🚀 Quick Start
 
@@ -115,18 +119,109 @@ curl http://localhost:3001/prompt/document-summarizer/llama-3.1-8b-instruct/prod
 curl -X POST http://localhost:3001/api/projects/1/test-backend \
   -H "Content-Type: application/json" \
   -d '{
-    "test_backend_url": "http://localhost:8000",
-    "user_prompt": "Help me with {{task}}",
-    "system_prompt": "You are a helpful coding assistant",
-    "variables": {"task": "Python debugging"},
-    "temperature": 0.7,
-    "max_len": 500,
-    "top_p": 0.9,
-    "top_k": 50
+    "prompt": "Help me with {{task}}",
+    "variables": {"task": "Python debugging"}
   }'
 ```
 
-### 6. Get Test Settings from Git
+### 5.1. Backend Testing with Chat Interface
+```bash
+curl -X POST http://localhost:3001/api/projects/1/test-backend \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Debug this Python code: {{code}}",
+    "variables": {"code": "def factorial(n):\n    if n == 0:\n        return 1\n    return n * factorial(n-1)"}
+  }'
+```
+
+### 5.2. Get Backend Test History
+```bash
+curl http://localhost:3001/api/projects/1/backend-history
+```
+
+### 5.3. Update Backend Test Status
+```bash
+curl -X PUT http://localhost:3001/api/projects/1/backend-history/1 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "rating": 5,
+    "notes": "Excellent debugging response",
+    "is_test": true
+  }'
+```
+
+### 5.4. Tag Backend Test as Production
+```bash
+curl -X POST http://localhost:3001/api/projects/1/backend-history/1/tag-prod \
+  -H "Content-Type: application/json" \
+  -d '{
+    "commit_message": "Promote debugging assistant to production"
+  }'
+```
+
+### 6. Generate Streaming Response
+```bash
+curl -X POST http://localhost:3001/api/projects/1/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userPrompt": "Explain {{concept}} in simple terms",
+    "systemPrompt": "You are a helpful teacher",
+    "variables": {"concept": "machine learning"},
+    "temperature": 0.7,
+    "maxLen": 200,
+    "topP": 0.9,
+    "topK": 50
+  }'
+```
+
+### 6.1. Generate Multi-Message Conversation
+```bash
+curl -X POST http://localhost:3001/api/projects/1/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {"role": "system", "content": "You are a helpful coding assistant"},
+      {"role": "user", "content": "How do I write a Python function?"},
+      {"role": "assistant", "content": "Here\'s how you write a basic Python function..."},
+      {"role": "user", "content": "Can you show me an example with {{topic}}?"}
+    ],
+    "variables": {"topic": "error handling"},
+    "temperature": 0.7,
+    "maxLen": 500
+  }'
+```
+
+### 7. Run Evaluation
+```bash
+curl -X POST http://localhost:3001/api/projects/1/eval \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userPrompt": "Summarize: {{text}}",
+    "systemPrompt": "You are a summarization expert",
+    "evalDataset": "xsum",
+    "numSamples": 10,
+    "scoringFunctions": ["relevance", "coherence", "conciseness"],
+    "variables": {"text": "sample text"}
+  }'
+```
+
+### 7.1. Run LLM-as-Judge Evaluation
+```bash
+curl -X POST http://localhost:3001/api/projects/1/eval \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userPrompt": "Rate the quality of this summary: {{summary}}",
+    "systemPrompt": "You are an expert evaluator. Rate from 1-10.",
+    "evalDataset": "custom_evaluation_set",
+    "numSamples": 50,
+    "scoringFunctions": ["accuracy", "completeness", "clarity"],
+    "variables": {"summary": "This is a test summary"}
+  }'
+```
+
+### 8. Git-based Settings Management
+
+### 8.1. Get Test Settings from Git
 ```bash
 curl http://localhost:3001/api/projects/1/test-settings
 ```
@@ -145,23 +240,88 @@ curl http://localhost:3001/api/projects/1/test-settings
 }
 ```
 
+### 8.2. Save Test Settings to Git
+```bash
+curl -X POST http://localhost:3001/api/projects/1/test-settings \
+  -H "Content-Type: application/json" \
+  -d '{
+    "test_backend_url": "http://localhost:8000",
+    "user_prompt": "Debug {{code_type}} code: {{code}}",
+    "system_prompt": "You are an expert code debugger",
+    "variables": {
+      "code_type": "Python",
+      "code": "example code here"
+    },
+    "temperature": 0.8,
+    "max_len": 1000
+  }'
+```
+
+### 8.3. Tag Backend Test Settings
+```bash
+curl -X POST http://localhost:3001/api/projects/1/backend-history/1/tag-test \
+  -H "Content-Type: application/json" \
+  -d '{
+    "commit_message": "Save debugging configuration as test settings"
+  }'
+```
+
+### 8.4. Check Git Repository Changes
+```bash
+curl http://localhost:3001/api/projects/1/git-changes
+```
+
+**Response Example:**
+```json
+{
+  "has_changes": true,
+  "modified_files": ["prompt.json", "settings.json"],
+  "untracked_files": ["new_config.json"],
+  "branch": "main",
+  "last_commit": "a1b2c3d"
+}
+```
+
+### 8.5. Clear Pull Request Cache
+```bash
+curl -X POST http://localhost:3001/api/projects/1/clear-pr-cache
+```
+
+### 8.6. Quick Git Authentication Status
+```bash
+curl http://localhost:3001/api/git/quick-status
+```
+
+**Response Example:**
+```json
+{
+  "authenticated": true,
+  "platform": "github",
+  "username": "your-username",
+  "last_validated": "2024-01-15T10:30:00Z"
+}
+```
+
 ## 📋 Key External API Endpoints
 
-### Projects and Models Discovery
+### **Projects and Models Discovery**
 - **GET** `/api/projects-models` - Get all available projects and their model configurations
 - **Tag**: `External API`
-- **Use Case**: Discover available projects for integration
+- **Use Case**: Discover available projects for integration with external systems
+- **Response**: Includes project names, provider IDs, LlamaStack URLs, and Git repository information
 
-### Latest Prompt Configuration  
-- **GET** `/prompt/{project_name}/{provider_id}` - Get most recent prompt configuration
+### **Latest Prompt Configuration**
+- **GET** `/prompt/{project_name}/{provider_id}` - Get most recent prompt configuration from database
 - **Tag**: `External API`
-- **Use Case**: Retrieve tested prompt templates for external use
+- **Use Case**: Retrieve latest tested prompt templates for external use
+- **Features**: Includes template variables, model parameters, and metadata
 
-### Production Prompt Configuration
+### **Production Prompt Configuration** ⭐ **RECOMMENDED**
 - **GET** `/prompt/{project_name}/{provider_id}/prod` - Get production-ready prompt configuration
 - **Tag**: `External API`
 - **Use Case**: Access only production-tested, approved prompts for deployment
-- **Note**: Serves from git repository when available, falls back to database
+- **Priority**: Serves from Git repository when available, falls back to database
+- **Security**: Only returns prompts that have gone through production approval workflow
 
 ### Git Integration
 - **POST** `/api/git/auth` - Authenticate with git platform (GitHub/GitLab/Gitea)
@@ -181,19 +341,29 @@ curl http://localhost:3001/api/projects/1/test-settings
 - **GET** `/api/projects/{id}/git-history` - Get unified git history
 - **POST** `/api/projects/{id}/sync-prs` - Sync PR statuses from git
 - **POST** `/api/projects/{id}/git/test-access` - Test git repository access
+- **POST** `/api/projects/{id}/backend-history/{historyId}/tag-prod` - Create production PR from backend test
+- **POST** `/api/projects/{id}/backend-history/{historyId}/tag-test` - Save backend test as test configuration
 - **Tag**: `Git`
 - **Use Case**: Git-based production deployment workflow
 - **Platform Support**: GitHub, GitLab, and Gitea fully supported
 
-### Backend Testing
-- **POST** `/api/projects/{id}/test-backend` - Test backend with streaming responses
-- **GET** `/api/projects/{id}/backend-history` - Get backend test history
-- **PUT** `/api/projects/{id}/backend-history/{historyId}` - Update backend test status
+### Backend Testing & Evaluation
+- **POST** `/api/projects/{id}/test-backend` - Test backend with streaming responses and performance metrics
+- **GET** `/api/projects/{id}/backend-history` - Get comprehensive backend test history
+- **PUT** `/api/projects/{id}/backend-history/{historyId}` - Update backend test status and ratings
 - **POST** `/api/projects/{id}/backend-history/{historyId}/tag-prod` - Create production PR from backend test
 - **POST** `/api/projects/{id}/backend-history/{historyId}/tag-test` - Save test settings from backend test
-- **Tag**: `Backend Testing`
-- **Use Case**: Test prompts against configured backend URLs
-- **Features**: Streaming responses, performance metrics, template variables
+- **POST** `/api/projects/{id}/eval` - Run LlamaStack evaluation with scoring functions and datasets
+- **POST** `/api/projects/{id}/generate` - Generate responses using LlamaStack with streaming
+- **Tag**: `Backend Testing`, `Generation`, `Evaluation`
+- **Use Case**: Test prompts against configured backend URLs, evaluate with datasets, generate streaming responses
+- **Features**: 
+  - Server-Sent Events (SSE) streaming
+  - Performance metrics and error tracking
+  - Template variable substitution (`{{variable}}`)
+  - LLM-as-judge evaluation scoring
+  - Dataset integration (HuggingFace compatible)
+  - Response time analytics
 
 ### Settings Management
 - **GET** `/api/projects/{id}/test-settings` - Get test settings from git
@@ -206,14 +376,53 @@ curl http://localhost:3001/api/projects/1/test-settings
 
 Endpoints are organized into logical groups:
 
-- **📁 Projects** - Project CRUD operations
-- **📜 History** - Prompt history management  
-- **⚡ Generation** - Response generation (streaming)
-- **🧪 Backend Testing** - Backend testing and validation
-- **🔀 Git** - Git platform authentication and operations
-- **⚙️ Settings** - Git-based settings management
-- **🌍 External API** - Integration endpoints
-- **📖 Documentation** - API information
+- **📁 Projects** - Project CRUD operations with automatic git integration
+- **📜 History** - Comprehensive prompt and test history management  
+- **⚡ Generation** - LlamaStack response generation with streaming
+- **🧪 Backend Testing** - External API testing with performance analytics
+- **🔬 Evaluation** - Advanced prompt evaluation with LLM scoring
+- **🔀 Git** - Multi-platform Git authentication and workflow operations
+- **⚙️ Settings** - Git-based configuration management with version control
+- **🌍 External API** - Production integration endpoints for external systems
+- **🏥 Health** - Monitoring and debugging endpoints
+- **📖 Documentation** - Interactive API documentation and guides
+
+## 📊 Advanced Features
+
+### **Streaming Support**
+All generation and testing endpoints support Server-Sent Events (SSE):
+- **Content-Type**: `text/event-stream`
+- **Event Types**: `token`, `done`, `error`, `status`
+- **Performance Metrics**: Response time, token count, error tracking
+- **Conversation Support**: Multi-message streaming with role-based context
+- **Thought Process Extraction**: Automatic parsing of `<think>` tags for model reasoning display
+
+### **Template Engine**
+Dynamic prompt templates with variable substitution:
+- **Syntax**: `{{variable_name}}`
+- **Validation**: Template validation and variable requirement checking
+- **Nested Variables**: Support for complex data structures
+- **Live Preview**: Real-time template processing and variable substitution display
+- **Multi-Context Support**: Template processing across prompts, backend tests, and evaluations
+
+### **Evaluation System** ⭐ **ENHANCED**
+Comprehensive prompt evaluation framework:
+- **LLM-as-Judge**: Automated scoring using LlamaStack models with customizable evaluation criteria
+- **Dataset Integration**: HuggingFace dataset compatibility with custom dataset support
+- **Scoring Functions**: Configurable evaluation criteria (relevance, coherence, accuracy, etc.)
+- **Batch Processing**: Evaluate prompts against multiple test cases with parallel processing
+- **Evaluation History**: Track evaluation results over time with performance analytics
+- **Custom Evaluation Prompts**: Define your own evaluation criteria and scoring methodologies
+
+### **GitOps Integration**
+Full Git workflow with enterprise support:
+- **Platforms**: GitHub (cloud/enterprise), GitLab (cloud/self-hosted), Gitea
+- **Security**: Fernet-encrypted token storage with platform-specific validation
+- **Workflows**: Automatic PR creation, commit tracking, branch management
+- **Caching**: Git commit caching for improved performance
+- **Production Pipeline**: Visual Test → Production promotion workflow with approval gates
+- **Settings Management**: Git-based configuration storage with version control
+- **Backend Test Integration**: Promote backend test results directly to production via Git workflow
 
 ## 🔗 Template Variables
 
@@ -245,7 +454,9 @@ Help me debug this Python code: def factorial(n):
 ### Starting the Server
 ```bash
 cd backend
-source myenv/bin/activate
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
 python main.py
 ```
 
@@ -261,7 +472,7 @@ Once the server is running:
 ```python
 import requests
 
-# Optional: Authenticate with git for production workflow
+# Optional: Authenticate with Git for production workflow
 git_auth = {
     "platform": "github",
     "username": "your-username", 
@@ -418,11 +629,112 @@ data: {"type": "done", "response_time": 1.23}
 - `token`: Partial response content
 - `done`: End of stream with performance metrics
 - `error`: Error occurred during streaming
+- `status`: Status updates for multi-step operations
+- `thought`: Extracted model reasoning from `<think>` tags
 
-## 🔍 Debug Endpoints
+## 🔍 Complete Endpoint Reference
 
-### Debug Information
-- **GET** `/api/debug/projects` - Debug endpoint for projects
-- **Tag**: `Debug`
-- **Use Case**: Troubleshooting and development
-- **Features**: Detailed project information with relationships
+### **💬 New Conversation & Multi-Message Support**
+- **POST** `/api/projects/{project_id}/generate` - Now supports both single prompts and multi-message conversations
+- **Message Format**: `{"role": "system|user|assistant", "content": "message text"}`
+- **Conversation Context**: Maintains conversation history across multiple exchanges
+- **Role-based Streaming**: Streaming responses maintain conversation context and role information
+
+### **🧠 Enhanced Thought Process Extraction**
+- **Automatic Detection**: Identifies and extracts `<think>...</think>` tags from model responses
+- **Real-time Display**: Shows model reasoning process during streaming
+- **Structured Output**: Separates reasoning from final response for better UX
+
+### **🎯 Production Promotion Pipeline**
+- **Visual Workflow**: Test → Production promotion with approval gates
+- **Status Tracking**: Real-time monitoring of promotion pipeline status
+- **Git Integration**: Automatic PR creation with detailed commit messages and metadata
+
+### **🏥 Health & Monitoring**
+- **GET** `/` - API overview and documentation home with feature summary
+- **GET** `/api` - OpenShift-compatible health check endpoint with detailed status
+- **GET** `/api/debug/projects` - Development debugging with project relationships and database state
+- **GET** `/api/git/quick-status` - Quick Git authentication status check with minimal response time
+
+### **📁 Project Management**
+- **GET** `/api/projects` - List all projects with Git integration status and model information
+- **POST** `/api/projects` - Create new project with automatic Git PR creation (if repository configured)
+- **GET** `/api/projects/{project_id}` - Get specific project details including Git configuration
+- **PUT** `/api/projects/{project_id}` - Update project configuration (triggers Git synchronization)
+- **DELETE** `/api/projects/{project_id}` - Delete project with cascading removal of all related data
+
+### **📜 Prompt History & Management**
+- **GET** `/api/projects/{project_id}/history` - Get prompt history with Git commit integration and metadata
+- **POST** `/api/projects/{project_id}/history` - Save new prompt to history with automatic timestamping
+- **PUT** `/api/projects/{project_id}/history/{history_id}` - Update prompt metadata (rating, notes, production status)
+- **POST** `/api/projects/{project_id}/history/{history_id}/tag-prod` - Create production pull request with approval workflow
+- **POST** `/api/projects/{project_id}/history/{history_id}/tag-test` - Commit prompt to Git as test configuration
+
+### **⚡ Generation & AI Operations**
+- **POST** `/api/projects/{project_id}/generate` - **🌊 STREAMING** - Generate responses with LlamaStack using Server-Sent Events
+- **POST** `/api/projects/{project_id}/eval` - **🧠 ADVANCED** - Run comprehensive evaluation with scoring functions and datasets
+
+### **🧪 Backend Testing & Validation**
+- **GET** `/api/projects/{project_id}/backend-history` - Get backend test results with performance analytics
+- **PUT** `/api/projects/{project_id}/backend-history/{history_id}` - Update backend test metadata and ratings
+- **POST** `/api/projects/{project_id}/test-backend` - **🌊 STREAMING** - Test external backend APIs with real-time response streaming
+- **POST** `/api/projects/{project_id}/backend-history/{history_id}/tag-prod` - Create production PR from successful backend test
+- **POST** `/api/projects/{project_id}/backend-history/{history_id}/tag-test` - Save test settings to Git repository
+- **POST** `/api/projects/{project_id}/eval` - **🧠 EVALUATION** - Run LLM-as-judge evaluations with dataset integration
+
+### **🔀 Git Integration & Workflows**
+- **POST** `/api/git/auth` - Authenticate with GitHub/GitLab/Gitea using platform-specific tokens
+- **GET** `/api/git/user` - Get authenticated Git user information and permissions
+- **GET** `/api/git/auth-status` - Check Git authentication status and token validity
+- **POST** `/api/git/sync-all` - Synchronize all projects with their Git repositories
+- **POST** `/api/projects/{project_id}/git/test-access` - Test Git repository access and permissions
+- **GET** `/api/projects/{project_id}/pending-prs` - Get pending pull requests with live status updates
+- **POST** `/api/projects/{project_id}/sync-prs` - Sync PR statuses from Git platforms with caching
+- **GET** `/api/projects/{project_id}/git-changes` - Check for Git repository changes and uncommitted files
+- **POST** `/api/projects/{project_id}/clear-pr-cache` - Clear pull request cache for immediate status refresh
+- **GET** `/api/projects/{project_id}/prod-history` - Get production history from Git commits with metadata
+- **GET** `/api/projects/{project_id}/git-history` - Get unified Git history with commit details and timestamps
+
+### **⚙️ Settings & Configuration Management**
+- **GET** `/api/projects/{project_id}/test-settings` - Get test settings from Git repository with version tracking
+- **POST** `/api/projects/{project_id}/test-settings` - Save test settings to Git with commit message and branching
+
+### **🌍 External Integration APIs**
+- **GET** `/api/projects-models` - List all projects and models for external system integration
+- **GET** `/prompt/{project_name}/{provider_id}` - Get latest prompt configuration with template variables
+- **GET** `/prompt/{project_name}/{provider_id}/prod` - Get production prompt from Git repository (preferred) or database
+
+## 🚨 Important Notes & Technical Specifications
+
+### **🌊 Streaming Endpoints**
+The following endpoints return Server-Sent Events (SSE) with real-time streaming:
+- **`/api/projects/{id}/generate`** - Token-by-token LlamaStack generation with delta updates
+- **`/api/projects/{id}/test-backend`** - Real-time backend testing responses with performance metrics
+- **Content-Type**: `text/event-stream`
+- **Keep-Alive**: Automatic connection management with heartbeat
+- **Error Handling**: Graceful error propagation within streams
+
+### **🔐 Git Platform Support**
+Comprehensive multi-platform Git integration with enterprise support:
+- **GitHub**: Personal Access Tokens, GitHub Enterprise Server, fine-grained tokens
+- **GitLab**: Private Tokens, self-hosted GitLab instances, project access tokens
+- **Gitea**: Access Tokens, self-hosted Gitea instances, organization support
+- **Authentication Testing**: Platform-specific validation with test repositories
+- **Repository Management**: Automatic PR/MR creation, branch management, commit tracking
+
+### **🛡️ Security Features**
+Enterprise-grade security with comprehensive protection:
+- **Token Encryption**: Fernet symmetric encryption for all stored credentials
+- **Rate Limiting**: Intelligent rate limiting for Git API operations to prevent abuse
+- **CORS Middleware**: OpenShift-compatible CORS configuration with origin validation
+- **Input Validation**: Comprehensive request validation with Pydantic schemas
+- **Secure Storage**: Encrypted credential storage with secure key management
+- **Error Sanitization**: Secure error messages preventing information leakage
+
+### **🚀 Performance & Scalability**
+Optimized for production deployment:
+- **Database**: SQLAlchemy ORM with connection pooling and query optimization
+- **Async Operations**: Mixed sync/async architecture for optimal performance
+- **Caching**: Git commit caching and intelligent cache invalidation
+- **Memory Management**: Efficient streaming with bounded memory usage
+- **Threading**: Safe multi-threaded streaming implementation

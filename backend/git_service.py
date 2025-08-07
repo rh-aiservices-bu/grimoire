@@ -14,6 +14,12 @@ class GitService:
         if isinstance(self.encryption_key, str):
             self.encryption_key = self.encryption_key.encode()
         self.cipher = Fernet(self.encryption_key)
+        
+        # Cache for Git operations to improve performance
+        self._auth_status_cache = {}
+        self._pr_status_cache = {}
+        self._commit_hash_cache = {}
+        self._cache_ttl = 30  # 30 seconds cache TTL
     
     def encrypt_token(self, token: str) -> str:
         """Encrypt git access token"""
@@ -22,6 +28,123 @@ class GitService:
     def decrypt_token(self, encrypted_token: str) -> str:
         """Decrypt git access token"""
         return self.cipher.decrypt(encrypted_token.encode()).decode()
+    
+    def _is_cache_valid(self, cache_key: str, cache_dict: dict) -> bool:
+        """Check if cache entry is still valid"""
+        import time
+        if cache_key not in cache_dict:
+            return False
+        return time.time() - cache_dict[cache_key]['timestamp'] < self._cache_ttl
+    
+    def _get_from_cache(self, cache_key: str, cache_dict: dict):
+        """Get data from cache if valid"""
+        if self._is_cache_valid(cache_key, cache_dict):
+            return cache_dict[cache_key]['data']
+        return None
+    
+    def _set_cache(self, cache_key: str, data, cache_dict: dict):
+        """Set cache entry with timestamp"""
+        import time
+        cache_dict[cache_key] = {
+            'data': data,
+            'timestamp': time.time()
+        }
+    
+    def invalidate_pr_cache(self, platform: str, repo_url: str, pr_number: int):
+        """Invalidate cache for a specific PR to force fresh status check"""
+        cache_key = f"{platform}:{repo_url}:{pr_number}"
+        if cache_key in self._pr_status_cache:
+            del self._pr_status_cache[cache_key]
+            print(f"🗑️  Invalidated PR cache for {cache_key}")
+    
+    def invalidate_pr_cache_for_repo(self, platform: str, repo_url: str):
+        """Invalidate all PR caches for a specific repository"""
+        prefix = f"{platform}:{repo_url}:"
+        keys_to_remove = [key for key in self._pr_status_cache.keys() if key.startswith(prefix)]
+        for key in keys_to_remove:
+            del self._pr_status_cache[key]
+        print(f"🗑️  Invalidated {len(keys_to_remove)} PR cache entries for {prefix}")
+    
+    def get_repository_head_commit(self, platform: str, token: str, repo_url: str) -> Optional[str]:
+        """Get the latest commit hash for repository HEAD (lightweight operation)"""
+        try:
+            cache_key = f"{platform}:{repo_url}"
+            cached_result = self._get_from_cache(cache_key, self._commit_hash_cache)
+            if cached_result is not None:
+                return cached_result
+            
+            _, owner, repo = self.parse_git_url(repo_url)
+            api_base = self.get_api_base_url(platform, repo_url)
+            headers = self.get_auth_headers(platform, token)
+            
+            if platform == 'github':
+                # Get default branch first
+                repo_info_url = f"{api_base}/repos/{owner}/{repo}"
+                repo_response = requests.get(repo_info_url, headers=headers)
+                if repo_response.status_code != 200:
+                    return None
+                default_branch = repo_response.json()['default_branch']
+                
+                # Get HEAD commit hash
+                ref_url = f"{api_base}/repos/{owner}/{repo}/git/refs/heads/{default_branch}"
+                ref_response = requests.get(ref_url, headers=headers)
+                if ref_response.status_code == 200:
+                    commit_hash = ref_response.json()['object']['sha']
+                    self._set_cache(cache_key, commit_hash, self._commit_hash_cache)
+                    return commit_hash
+                    
+            elif platform == 'gitlab':
+                project_path = f"{owner}%2F{repo}"
+                project_url = f"{api_base}/projects/{project_path}"
+                project_response = requests.get(project_url, headers=headers)
+                if project_response.status_code == 200:
+                    commit_hash = project_response.json().get('last_activity_at')
+                    self._set_cache(cache_key, commit_hash, self._commit_hash_cache)
+                    return commit_hash
+                    
+            elif platform == 'gitea':
+                repo_info_url = f"{api_base}/repos/{owner}/{repo}"
+                repo_response = requests.get(repo_info_url, headers=headers)
+                if repo_response.status_code == 200:
+                    commit_hash = repo_response.json().get('updated_at')
+                    self._set_cache(cache_key, commit_hash, self._commit_hash_cache)
+                    return commit_hash
+            
+            return None
+            
+        except Exception as e:
+            print(f"Failed to get repository head commit: {e}")
+            return None
+    
+    def has_repository_changed(self, platform: str, token: str, repo_url: str, last_known_commit: str = None) -> Dict[str, Any]:
+        """Check if repository has changed since last known commit (lightweight check)"""
+        try:
+            current_commit = self.get_repository_head_commit(platform, token, repo_url)
+            
+            if not current_commit:
+                return {"changed": False, "error": "Unable to get current commit"}
+            
+            # If no last known commit, assume it has changed
+            if not last_known_commit:
+                return {
+                    "changed": True, 
+                    "current_commit": current_commit,
+                    "reason": "no_baseline"
+                }
+            
+            # Compare commits
+            changed = current_commit != last_known_commit
+            
+            return {
+                "changed": changed,
+                "current_commit": current_commit,
+                "last_known_commit": last_known_commit,
+                "reason": "commit_diff" if changed else "no_changes"
+            }
+            
+        except Exception as e:
+            print(f"Failed to check repository changes: {e}")
+            return {"changed": False, "error": str(e)}
     
     def parse_git_url(self, repo_url: str) -> Tuple[str, str, str]:
         """Parse git repository URL to extract platform, owner, and repo name"""
@@ -106,8 +229,14 @@ class GitService:
             raise ValueError(f"Unsupported platform: {platform}")
     
     def test_git_access(self, platform: str, username: str, token: str, repo_url: str, server_url: Optional[str] = None) -> bool:
-        """Test if git credentials have access to the repository"""
+        """Test if git credentials have access to the repository (with caching)"""
         try:
+            # Check cache first (shorter TTL for auth tests)
+            cache_key = f"auth:{platform}:{username}:{repo_url}"
+            cached_result = self._get_from_cache(cache_key, self._auth_status_cache)
+            if cached_result is not None:
+                return cached_result
+            
             api_base = self.get_api_base_url(platform, server_url, repo_url)
             headers = self.get_auth_headers(platform, token)
             
@@ -137,17 +266,21 @@ class GitService:
                         print(f"GitLab user info: {user_data}")
                         # Verify the username matches (case-insensitive)
                         if returned_username and returned_username.lower() == username.lower():
+                            self._set_cache(cache_key, True, self._auth_status_cache)
                             return True
                         else:
                             print(f"Username mismatch: expected '{username}', got '{returned_username}'")
+                            self._set_cache(cache_key, False, self._auth_status_cache)
                             return False
                     except Exception as e:
                         print(f"Failed to parse GitLab user response: {e}")
+                        self._set_cache(cache_key, False, self._auth_status_cache)
                         return False
                 else:
                     print(f"GitLab authentication failed with status: {response.status_code}")
                     if response.status_code == 401:
                         print("Invalid token or insufficient permissions")
+                    self._set_cache(cache_key, False, self._auth_status_cache)
                     return False
             elif platform == 'gitea':
                 # For Gitea user endpoint, check if we get user info and username matches
@@ -158,21 +291,27 @@ class GitService:
                         print(f"Gitea user info: {user_data}")
                         # Verify the username matches (case-insensitive)
                         if returned_username and returned_username.lower() == username.lower():
+                            self._set_cache(cache_key, True, self._auth_status_cache)
                             return True
                         else:
                             print(f"Username mismatch: expected '{username}', got '{returned_username}'")
+                            self._set_cache(cache_key, False, self._auth_status_cache)
                             return False
                     except Exception as e:
                         print(f"Failed to parse Gitea user response: {e}")
+                        self._set_cache(cache_key, False, self._auth_status_cache)
                         return False
                 else:
                     print(f"Gitea authentication failed with status: {response.status_code}")
                     if response.status_code == 401:
                         print("Invalid token or insufficient permissions")
+                    self._set_cache(cache_key, False, self._auth_status_cache)
                     return False
             else:
                 # For GitHub, check if we can access the public test repo
-                return response.status_code == 200
+                result = response.status_code == 200
+                self._set_cache(cache_key, result, self._auth_status_cache)
+                return result
                 
         except Exception as e:
             print(f"Git access test failed: {e}")
@@ -756,41 +895,89 @@ class GitService:
             traceback.print_exc()
             return None
     
-    def check_pr_status(self, platform: str, token: str, repo_url: str, pr_number: int) -> Optional[str]:
-        """Check if a PR is merged, closed, or still open"""
+    def check_pr_status(self, platform: str, token: str, repo_url: str, pr_number: int, force_refresh: bool = False) -> Optional[str]:
+        """Check if a PR is merged, closed, or still open (with caching)"""
         try:
-            _, owner, repo = self.parse_git_url(repo_url)
-            api_base = self.get_api_base_url(platform, repo_url)
+            # Check cache first unless force refresh is requested
+            cache_key = f"{platform}:{repo_url}:{pr_number}"
+            if not force_refresh:
+                cached_result = self._get_from_cache(cache_key, self._pr_status_cache)
+                if cached_result is not None:
+                    return cached_result
             
-            headers = {
-                'Authorization': f'token {token}',
-                'Accept': 'application/vnd.github.v3+json' if platform == 'github' else 'application/json'
-            }
+            _, owner, repo = self.parse_git_url(repo_url)
+            api_base = self.get_api_base_url(platform, None, repo_url)
+            headers = self.get_auth_headers(platform, token)
+            
+            print(f"🔍 Checking PR status for platform: {platform}")
+            print(f"🔍 Repo: {owner}/{repo}, PR: {pr_number}")
+            print(f"🔍 API Base: {api_base}")
             
             if platform == 'github':
                 pr_url = f"{api_base}/repos/{owner}/{repo}/pulls/{pr_number}"
-                print(f"Checking PR status at: {pr_url}")
+                print(f"🔍 GitHub PR URL: {pr_url}")
                 response = requests.get(pr_url, headers=headers)
-                print(f"PR status response: {response.status_code}")
+                print(f"🔍 GitHub PR status response: {response.status_code}")
                 
                 if response.status_code == 200:
                     pr_data = response.json()
-                    print(f"PR data: merged={pr_data.get('merged')}, state={pr_data.get('state')}")
-                    if pr_data.get('merged'):
-                        return 'merged'
-                    elif pr_data.get('state') == 'closed':
-                        return 'closed'
-                    else:
-                        return 'open'
+                    print(f"🔍 GitHub PR data: merged={pr_data.get('merged')}, state={pr_data.get('state')}")
+                    status = 'merged' if pr_data.get('merged') else ('closed' if pr_data.get('state') == 'closed' else 'open')
+                    self._set_cache(cache_key, status, self._pr_status_cache)
+                    return status
                 else:
-                    print(f"Failed to get PR info: {response.text}")
+                    print(f"❌ Failed to get GitHub PR info: {response.text}")
+                    return None
+                    
+            elif platform == 'gitlab':
+                # GitLab uses merge requests (MRs) instead of PRs
+                project_path = f"{owner}%2F{repo}"  # URL-encoded
+                mr_url = f"{api_base}/projects/{project_path}/merge_requests/{pr_number}"
+                print(f"🔍 GitLab MR URL: {mr_url}")
+                response = requests.get(mr_url, headers=headers)
+                print(f"🔍 GitLab MR status response: {response.status_code}")
+                
+                if response.status_code == 200:
+                    mr_data = response.json()
+                    state = mr_data.get('state')
+                    merge_status = mr_data.get('merge_status')
+                    print(f"🔍 GitLab MR data: state={state}, merge_status={merge_status}")
+                    
+                    status = 'merged' if state == 'merged' else ('closed' if state == 'closed' else 'open')
+                    self._set_cache(cache_key, status, self._pr_status_cache)
+                    return status
+                else:
+                    print(f"❌ Failed to get GitLab MR info: {response.text}")
+                    return None
+                    
+            elif platform == 'gitea':
+                pr_url = f"{api_base}/repos/{owner}/{repo}/pulls/{pr_number}"
+                print(f"🔍 Gitea PR URL: {pr_url}")
+                print(f"🔍 Gitea headers: {headers}")
+                response = requests.get(pr_url, headers=headers)
+                print(f"🔍 Gitea PR status response: {response.status_code}")
+                print(f"🔍 Gitea PR response text: {response.text[:500]}...")
+                
+                if response.status_code == 200:
+                    pr_data = response.json()
+                    state = pr_data.get('state')
+                    merged = pr_data.get('merged')
+                    print(f"🔍 Gitea PR data: state={state}, merged={merged}")
+                    print(f"🔍 Full Gitea PR data keys: {list(pr_data.keys())}")
+                    
+                    status = 'merged' if merged else ('closed' if state == 'closed' else 'open')
+                    self._set_cache(cache_key, status, self._pr_status_cache)
+                    return status
+                else:
+                    print(f"❌ Failed to get Gitea PR info: {response.text}")
+                    print(f"❌ Response headers: {response.headers}")
                     return None
             else:
-                # GitLab/Gitea implementation would go here
+                print(f"❌ Unsupported platform: {platform}")
                 return None
                 
         except Exception as e:
-            print(f"Failed to check PR status: {e}")
+            print(f"❌ Failed to check PR status: {e}")
             import traceback
             traceback.print_exc()
             return None
@@ -859,16 +1046,28 @@ class GitService:
                     return []
                     
             elif platform == 'gitea':
+                # First try to get all commits, then filter by file if needed
                 commits_url = f"{api_base}/repos/{owner}/{repo}/commits"
                 params = {
-                    'path': file_path,
                     'limit': limit
                 }
-                print(f"🔍 Gitea commits URL: {commits_url}")
-                print(f"🔍 Gitea params: {params}")
                 
-                response = requests.get(commits_url, headers=headers, params=params)
+                # Try with path parameter first
+                params_with_path = params.copy()
+                params_with_path['path'] = file_path
+                
+                print(f"🔍 Gitea commits URL: {commits_url}")
+                print(f"🔍 Gitea params with path: {params_with_path}")
+                
+                response = requests.get(commits_url, headers=headers, params=params_with_path)
                 print(f"🔍 Gitea response status: {response.status_code}")
+                
+                # If path parameter fails, try without it
+                if response.status_code == 404:
+                    print(f"🔍 Path parameter failed, trying without path filter")
+                    response = requests.get(commits_url, headers=headers, params=params)
+                    print(f"🔍 Gitea response status (no path): {response.status_code}")
+                
                 print(f"🔍 Gitea response headers: {dict(response.headers)}")
                 
                 if response.status_code == 200:

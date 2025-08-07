@@ -30,6 +30,7 @@ function AppContent() {
     gitRepoUrl?: string;
   }) => {
     await actions.createProject(data);
+    setIsModalOpen(false); // Close modal after successful creation
     navigate(`/project/${state.selectedProject?.id}`);
   };
 
@@ -85,6 +86,7 @@ function AppContent() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSubmit={handleCreateProject}
+        isCreating={state.isCreatingProject}
       />
       <GitAuthModal
         isOpen={isGitAuthModalOpen}

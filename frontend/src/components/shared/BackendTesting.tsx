@@ -273,11 +273,34 @@ EXPECTED_RESPONSE: {expected_answer}`
     }
   };
 
-  const checkAuthStatus = async () => {
+  const checkAuthStatus = async (useQuickCheck: boolean = true) => {
     setIsCheckingAuth(true);
     try {
-      const status = await api.getGitAuthStatus();
-      setAuthStatus(status);
+      if (useQuickCheck) {
+        // First try instant check (just DB lookup, no API calls) for immediate UI update
+        const instantStatus = await api.getInstantGitAuthStatus();
+        setAuthStatus({
+          authenticated: instantStatus.authenticated,
+          user: instantStatus.user,
+          platform: instantStatus.user?.platform,
+          last_used: undefined // We don't have this from instant check
+        });
+        setIsCheckingAuth(false);
+        
+        // If we have a user, optionally do a background verification (don't await it)
+        if (instantStatus.authenticated) {
+          api.getQuickGitAuthStatus().then(fullStatus => {
+            setAuthStatus(fullStatus);
+          }).catch(err => {
+            console.warn('Background auth verification failed:', err);
+          });
+        }
+      } else {
+        // Full check for when we need fresh/verified data
+        const status = await api.getGitAuthStatus();
+        setAuthStatus(status);
+        setIsCheckingAuth(false);
+      }
     } catch (err) {
       console.error('Failed to check auth status:', err);
       setAuthStatus({
@@ -287,7 +310,6 @@ EXPECTED_RESPONSE: {expected_answer}`
         last_used: undefined,
         error: 'Failed to check authentication status'
       });
-    } finally {
       setIsCheckingAuth(false);
     }
   };
@@ -333,8 +355,8 @@ EXPECTED_RESPONSE: {expected_answer}`
       setIsGitAuthModalOpen(false);
       setSuccess('Git authentication successful!');
       
-      // Refresh auth status after successful authentication
-      await checkAuthStatus();
+      // Refresh auth status after successful authentication (use full check for fresh data)
+      await checkAuthStatus(false);
     } catch (err) {
       console.error('Git authentication error:', err);
       setError(`Authentication failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -365,7 +387,7 @@ EXPECTED_RESPONSE: {expected_answer}`
       setIsSettingsModalOpen(false);
       setSuccess(`Settings saved successfully! ${result.commit_url ? 'Commit: ' + result.commit_sha?.substring(0, 7) : ''}`);
       
-      // Refresh auth status after successful save
+      // Refresh auth status after successful save (quick check is fine)
       checkAuthStatus();
     } catch (err) {
       console.error('Settings save error:', err);
@@ -579,6 +601,7 @@ EXPECTED_RESPONSE: {expected_answer}`
                       <Form>
                         <FormGroup label="Dataset URL" isRequired>
                           <TextArea
+                            id="eval-dataset"
                             value={dataset}
                             onChange={(_, value) => setDataset(value)}
                             placeholder="huggingface://datasets/llamastack/simpleqa?split=train"
@@ -600,6 +623,7 @@ EXPECTED_RESPONSE: {expected_answer}`
                       <Form>
                         <FormGroup>
                           <TextArea
+                            id="eval-config"
                             value={evalConfig}
                             onChange={(_, value) => setEvalConfig(value)}
                             placeholder="Enter eval configuration in JSON format"
