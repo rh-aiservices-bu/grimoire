@@ -43,6 +43,17 @@ export const PromptHistoryPage: React.FC<PromptHistoryPageProps> = ({
   project,
   onNotification,
 }) => {
+  // Helper function to extract repo name from git URL
+  const getRepoName = (gitUrl?: string) => {
+    if (!gitUrl) return null;
+    try {
+      const url = gitUrl.replace(/\.git$/, ''); // Remove .git extension
+      const parts = url.split('/');
+      return parts[parts.length - 1]; // Get the last part (repo name)
+    } catch {
+      return null;
+    }
+  };
   const [history, setHistory] = useState<PromptHistory[]>([]);
   const [selectedPrompt, setSelectedPrompt] = useState<PromptHistory | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -714,22 +725,22 @@ export const PromptHistoryPage: React.FC<PromptHistoryPageProps> = ({
 
             {/* System Status Overview */}
             <div style={{
-              padding: '1rem',
+              padding: '0.75rem',
               borderBottom: '1px solid #d0d0d0',
               backgroundColor: '#f8f9fa'
             }}>
-              <Title headingLevel="h4" size="sm" style={{ margin: 0, marginBottom: '0.75rem' }}>
+              <Title headingLevel="h4" size="sm" style={{ margin: 0, marginBottom: '0.5rem' }}>
                 System Status
               </Title>
               <div style={{ 
                 display: 'grid', 
-                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-                gap: '0.75rem' 
+                gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', 
+                gap: '0.5rem' 
               }}>
                 {/* Test Environment Status */}
                 <div 
                   style={{
-                    padding: '0.75rem',
+                    padding: '0.5rem',
                     backgroundColor: '#ffffff',
                     border: '1px solid #d0d0d0',
                     borderRadius: '4px',
@@ -804,7 +815,7 @@ export const PromptHistoryPage: React.FC<PromptHistoryPageProps> = ({
                 {/* Production Environment Status */}
                 <div 
                   style={{
-                    padding: '0.75rem',
+                    padding: '0.5rem',
                     backgroundColor: '#ffffff',
                     border: '1px solid #d0d0d0',
                     borderRadius: '4px',
@@ -878,7 +889,7 @@ export const PromptHistoryPage: React.FC<PromptHistoryPageProps> = ({
 
                 {/* Pending PRs Status */}
                 <div style={{
-                  padding: '0.75rem',
+                  padding: '0.5rem',
                   backgroundColor: '#ffffff',
                   border: '1px solid #d0d0d0',
                   borderRadius: '4px'
@@ -936,7 +947,7 @@ export const PromptHistoryPage: React.FC<PromptHistoryPageProps> = ({
 
                 {/* Git Authentication Status */}
                 <div style={{
-                  padding: '0.75rem',
+                  padding: '0.5rem',
                   backgroundColor: '#ffffff',
                   border: '1px solid #d0d0d0',
                   borderRadius: '4px'
@@ -946,14 +957,14 @@ export const PromptHistoryPage: React.FC<PromptHistoryPageProps> = ({
                     color: '#666', 
                     textTransform: 'uppercase',
                     fontWeight: 600,
-                    marginBottom: '0.5rem'
+                    marginBottom: '0.25rem'
                   }}>
                     Git Authentication
                   </div>
                   <div style={{
                     display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
+                    flexDirection: 'column',
+                    gap: '0.5rem'
                   }}>
                     {gitAuthStatus.authenticated && gitAuthStatus.user ? (
                       <div style={{ 
@@ -969,12 +980,16 @@ export const PromptHistoryPage: React.FC<PromptHistoryPageProps> = ({
                           backgroundColor: '#3e8635',
                           borderRadius: '50%'
                         }} />
-                        <span>
-                          {gitAuthStatus.user.username} ({gitAuthStatus.user.platform}
-                          {gitAuthStatus.user.server_url && gitAuthStatus.user.server_url !== 'https://github.com' && gitAuthStatus.user.server_url !== 'https://gitlab.com' ? 
-                            ` - ${new URL(gitAuthStatus.user.server_url).hostname}` : 
-                            ''
-                          })
+                        <span style={{
+                          wordBreak: 'break-word',
+                          lineHeight: '1.2'
+                        }}>
+                          {gitAuthStatus.user.username}
+                          {getRepoName(project.git_repo_url) && (
+                            <span style={{ color: '#666', fontSize: '0.75rem' }}>
+                              {' → '}{getRepoName(project.git_repo_url)}
+                            </span>
+                          )}
                         </span>
                       </div>
                     ) : (
@@ -1000,7 +1015,10 @@ export const PromptHistoryPage: React.FC<PromptHistoryPageProps> = ({
                       onClick={() => setIsGitAuthModalOpen(true)}
                       style={{ 
                         padding: '0.25rem 0.5rem',
-                        fontSize: '0.75rem'
+                        fontSize: '0.75rem',
+                        alignSelf: 'flex-start',
+                        minWidth: 'auto',
+                        height: 'auto'
                       }}
                     >
                       {gitAuthStatus.authenticated ? 'Reconfigure' : 'Authenticate'}

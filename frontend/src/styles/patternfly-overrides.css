@@ -1,5 +1,28 @@
 /* PatternFly compliant overrides and customizations */
 
+/*
+ * GRIMOIRE GLOBAL FONT SYSTEM
+ * ============================
+ * 
+ * To change fonts across the entire application, modify the CSS variables in the :root section below.
+ * All typography throughout the app will automatically update.
+ * 
+ * Key Variables to Customize:
+ * - --grimoire-font-size-sm: Main body text size (currently 14px)
+ * - --grimoire-font-size-heading: Section headers (currently 16px) 
+ * - --grimoire-font-family: Font stack for entire app
+ * - --grimoire-font-weight-normal: Regular text weight (currently 400)
+ * - --grimoire-font-weight-medium: Headings and labels (currently 500)
+ * - --grimoire-text-color: Main text color
+ * - --grimoire-text-color-subtle: Help text and descriptions
+ * 
+ * Example: To make all fonts smaller, just change:
+ * --grimoire-font-size-sm: 12px;
+ * --grimoire-font-size-heading: 14px;
+ * 
+ * This system overrides PatternFly v6 design tokens globally while maintaining compatibility.
+ */
+
 /* Use PatternFly's design system properly */
 .pf-c-page {
   --pf-c-page--BackgroundColor: var(--pf-global--BackgroundColor--light-100);
@@ -76,114 +99,166 @@
   --pf-c-card--BoxShadow: var(--pf-global--BoxShadow--sm);
 }
 
-/* Modern PatternFly v6 design tokens for refined typography (ODH Dashboard approach) */
+/* Global Font Variables - Change fonts here for entire application */
+:root {
+  /* Override PatternFly v6 design tokens globally */
+  --pf-t--global--font--size--body--xs: 12px;
+  --pf-t--global--font--size--body--sm: 14px;
+  --pf-t--global--font--size--body--md: 16px;
+  --pf-t--global--font--size--body--lg: 18px;
+  --pf-t--global--font--size--body--xl: 20px;
+  
+  --pf-t--global--font--size--heading--sm: 16px;
+  --pf-t--global--font--size--heading--md: 18px;
+  --pf-t--global--font--size--heading--lg: 20px;
+  --pf-t--global--font--size--heading--xl: 24px;
+  
+  --pf-t--global--font--weight--body--default: 400;
+  --pf-t--global--font--weight--heading--default: 500;
+  
+  --pf-t--global--line-height--body: 1.5;
+  --pf-t--global--line-height--heading: 1.3;
+  
+  --pf-t--global--font--family--body: "RedHatText", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --pf-t--global--font--family--heading: var(--pf-t--global--font--family--body);
+  
+  --pf-t--global--text--color--regular: #151515;
+  --pf-t--global--text--color--subtle: #6a6e73;
+  --pf-t--global--text--color--placeholder: #8a8d90;
+  
+  /* Custom Grimoire font variables for easy customization */
+  --grimoire-font-size-xs: var(--pf-t--global--font--size--body--xs);
+  --grimoire-font-size-sm: var(--pf-t--global--font--size--body--sm);
+  --grimoire-font-size-md: var(--pf-t--global--font--size--body--md);
+  --grimoire-font-size-lg: var(--pf-t--global--font--size--body--lg);
+  --grimoire-font-size-heading: var(--pf-t--global--font--size--heading--sm);
+  
+  --grimoire-font-weight-normal: var(--pf-t--global--font--weight--body--default);
+  --grimoire-font-weight-medium: var(--pf-t--global--font--weight--heading--default);
+  
+  --grimoire-line-height: var(--pf-t--global--line-height--body);
+  --grimoire-font-family: var(--pf-t--global--font--family--body);
+  
+  --grimoire-text-color: var(--pf-t--global--text--color--regular);
+  --grimoire-text-color-subtle: var(--pf-t--global--text--color--subtle);
+  --grimoire-text-color-placeholder: var(--pf-t--global--text--color--placeholder);
+}
+
+/* Apply global typography to body */
 body {
-  /* Use PatternFly v6 design tokens for better typography */
-  font-size: var(--pf-t--global--font--size--body--sm, 14px) !important;
-  font-weight: var(--pf-t--global--font--weight--body--default, 400) !important;
-  font-family: var(--pf-t--global--font--family--body, "RedHatText", "Overpass", overpass, helvetica, arial, sans-serif) !important;
-  line-height: var(--pf-t--global--line-height--body, 1.5) !important;
-  color: var(--pf-t--global--text--color--regular, #151515) !important;
+  font-size: var(--grimoire-font-size-sm) !important;
+  font-weight: var(--grimoire-font-weight-normal) !important;
+  font-family: var(--grimoire-font-family) !important;
+  line-height: var(--grimoire-line-height) !important;
+  color: var(--grimoire-text-color) !important;
 }
 
-/* Override PatternFly's default font sizes using v6 design tokens */
+/* Global PatternFly component overrides using Grimoire variables */
 .pf-c-title, .pf-v6-c-title {
-  --pf-c-title--m-4xl--FontSize: var(--pf-t--global--font--size--heading--xl);
-  --pf-c-title--m-3xl--FontSize: var(--pf-t--global--font--size--heading--lg);
-  --pf-c-title--m-2xl--FontSize: var(--pf-t--global--font--size--heading--md);
-  --pf-c-title--m-xl--FontSize: var(--pf-t--global--font--size--heading--sm);
-  --pf-c-title--m-lg--FontSize: var(--pf-t--global--font--size--body--lg);
-  font-weight: var(--pf-t--global--font--weight--heading--default, 600) !important;
+  --pf-c-title--m-4xl--FontSize: var(--grimoire-font-size-lg);
+  --pf-c-title--m-3xl--FontSize: var(--grimoire-font-size-heading);
+  --pf-c-title--m-2xl--FontSize: var(--grimoire-font-size-md);
+  --pf-c-title--m-xl--FontSize: var(--grimoire-font-size-sm);
+  --pf-c-title--m-lg--FontSize: var(--grimoire-font-size-sm);
+  font-weight: var(--grimoire-font-weight-medium) !important;
+  font-family: var(--grimoire-font-family) !important;
+  color: var(--grimoire-text-color) !important;
 }
 
-/* Make buttons more compact using v6 tokens */
+/* Global button styling */
 .pf-c-button, .pf-v6-c-button {
-  font-size: var(--pf-t--global--font--size--body--sm, 14px) !important;
-  padding: var(--pf-t--global--spacer--xs, 4px) var(--pf-t--global--spacer--sm, 8px) !important;
-  font-weight: var(--pf-t--global--font--weight--body--default, 400) !important;
+  font-size: var(--grimoire-font-size-sm) !important;
+  font-weight: var(--grimoire-font-weight-normal) !important;
+  font-family: var(--grimoire-font-family) !important;
 }
 
-/* Make form controls more compact using v6 tokens */
+/* Global form control styling */
 .pf-c-form-control, .pf-v6-c-form-control {
-  font-size: var(--pf-t--global--font--size--body--sm, 14px) !important;
+  font-size: var(--grimoire-font-size-sm) !important;
+  font-family: var(--grimoire-font-family) !important;
 }
 
-/* Make form labels refined using v6 tokens */
+/* Global form label styling */
 .pf-c-form__label, .pf-v6-c-form__label {
-  font-size: var(--pf-t--global--font--size--body--sm, 14px) !important;
-  font-weight: var(--pf-t--global--font--weight--body--default, 400) !important;
-  color: var(--pf-t--global--text--color--regular, #151515) !important;
+  font-size: var(--grimoire-font-size-sm) !important;
+  font-weight: var(--grimoire-font-weight-normal) !important;
+  color: var(--grimoire-text-color) !important;
+  font-family: var(--grimoire-font-family) !important;
 }
 
-/* Make tables more compact using v6 tokens */
+/* Global table styling */
 .pf-c-table, .pf-v6-c-table {
-  font-size: var(--pf-t--global--font--size--body--sm, 14px) !important;
+  font-size: var(--grimoire-font-size-sm) !important;
+  font-family: var(--grimoire-font-family) !important;
 }
 
-/* Make cards more compact using v6 tokens */
+/* Global card styling */
 .pf-c-card__body, .pf-v6-c-card__body {
-  font-size: var(--pf-t--global--font--size--body--sm, 14px) !important;
+  font-size: var(--grimoire-font-size-sm) !important;
+  font-family: var(--grimoire-font-family) !important;
 }
 
-/* Adjust modal content using v6 tokens */
+/* Global modal styling */
 .pf-c-modal-box__body, .pf-v6-c-modal-box__body {
-  font-size: var(--pf-t--global--font--size--body--sm, 14px) !important;
+  font-size: var(--grimoire-font-size-sm) !important;
+  font-family: var(--grimoire-font-family) !important;
 }
 
-/* Refined typography for parameter sections using PatternFly v6 design tokens */
+/* Parameter section styling using global Grimoire variables */
 .pf-c-title.pf-m-md,
 h3.pf-c-title.pf-m-md,
 .pf-v6-c-title.pf-m-md,
 h3.pf-v6-c-title.pf-m-md {
-  font-size: var(--pf-t--global--font--size--body--lg, 16px) !important;
-  font-weight: var(--pf-t--global--font--weight--heading--default, 500) !important;
-  color: var(--pf-t--global--text--color--regular, #151515) !important;
-  margin-bottom: var(--pf-t--global--spacer--sm, 8px) !important;
-  letter-spacing: 0.01em !important;
+  font-size: var(--grimoire-font-size-heading) !important;
+  font-weight: var(--grimoire-font-weight-medium) !important;
+  color: var(--grimoire-text-color) !important;
+  font-family: var(--grimoire-font-family) !important;
+  line-height: var(--grimoire-line-height) !important;
 }
 
-/* Refined help text and descriptions using PatternFly v6 design tokens */
+/* Help text and descriptions using global Grimoire variables */
 .odh-form-section__desc,
 div[style*="color: #666"],
 [style*="fontSize: 'var(--pf-global--FontSize--sm)')"] {
-  font-size: var(--pf-t--global--font--size--body--sm, 14px) !important;
-  color: var(--pf-t--global--text--color--subtle, #6a6e73) !important;
-  font-weight: var(--pf-t--global--font--weight--body--default, 400) !important;
-  line-height: var(--pf-t--global--line-height--body, 1.5) !important;
-  font-family: var(--pf-t--global--font--family--body, "RedHatText", "Overpass", overpass, helvetica, arial, sans-serif) !important;
+  font-size: var(--grimoire-font-size-sm) !important;
+  color: var(--grimoire-text-color-subtle) !important;
+  font-weight: var(--grimoire-font-weight-normal) !important;
+  line-height: var(--grimoire-line-height) !important;
+  font-family: var(--grimoire-font-family) !important;
 }
 
-/* Form label refinements using PatternFly v6 design tokens */
+/* Form label text using global Grimoire variables */
 .pf-c-form__label-text, .pf-v6-c-form__label-text {
-  font-size: var(--pf-t--global--font--size--body--sm, 14px) !important;
-  font-weight: var(--pf-t--global--font--weight--body--default, 500) !important;
-  color: var(--pf-t--global--text--color--regular, #151515) !important;
+  font-size: var(--grimoire-font-size-sm) !important;
+  font-weight: var(--grimoire-font-weight-medium) !important;
+  color: var(--grimoire-text-color) !important;
+  font-family: var(--grimoire-font-family) !important;
 }
 
-/* Input placeholder refinements using PatternFly v6 design tokens */
+/* Input placeholders using global Grimoire variables */
 .pf-c-form-control::placeholder, 
 .pf-v6-c-form-control::placeholder {
-  font-size: var(--pf-t--global--font--size--body--sm, 14px) !important;
-  color: var(--pf-t--global--text--color--placeholder, #8a8d90) !important;
-  font-weight: var(--pf-t--global--font--weight--body--default, 400) !important;
+  font-size: var(--grimoire-font-size-sm) !important;
+  color: var(--grimoire-text-color-placeholder) !important;
+  font-weight: var(--grimoire-font-weight-normal) !important;
+  font-family: var(--grimoire-font-family) !important;
 }
 
-/* Clean, refined parameter section styling using PatternFly v6 approach */
-/* Target specific parameter section patterns */
+/* Specific parameter section patterns using global Grimoire variables */
 div[style*="marginBottom: var(--pf-global--spacer--lg)"] h3,
 div[style*="margin-bottom"] .pf-c-title {
-  font-size: var(--pf-t--global--font--size--body--lg, 16px) !important;
-  font-weight: var(--pf-t--global--font--weight--body--default, 500) !important;
-  color: var(--pf-t--global--text--color--regular, #151515) !important;
-  margin-bottom: var(--pf-t--global--spacer--sm, 8px) !important;
+  font-size: var(--grimoire-font-size-heading) !important;
+  font-weight: var(--grimoire-font-weight-medium) !important;
+  color: var(--grimoire-text-color) !important;
+  font-family: var(--grimoire-font-family) !important;
 }
 
-/* Clean help text styling for Variables section */
+/* Variables section help text using global Grimoire variables */
 div[style*="color: #666"][style*="fontSize: var(--pf-global--FontSize--sm)"],
 div[style*="color: #666"][style*="marginBottom: var(--pf-global--spacer--sm)"] {
-  font-size: var(--pf-t--global--font--size--body--sm, 14px) !important;
-  color: var(--pf-t--global--text--color--subtle, #6a6e73) !important;
-  font-weight: var(--pf-t--global--font--weight--body--default, 400) !important;
-  line-height: var(--pf-t--global--line-height--body, 1.5) !important;
-  font-family: var(--pf-t--global--font--family--body) !important;
+  font-size: var(--grimoire-font-size-sm) !important;
+  color: var(--grimoire-text-color-subtle) !important;
+  font-weight: var(--grimoire-font-weight-normal) !important;
+  line-height: var(--grimoire-line-height) !important;
+  font-family: var(--grimoire-font-family) !important;
 }

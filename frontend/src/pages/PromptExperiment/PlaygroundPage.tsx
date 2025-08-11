@@ -341,7 +341,7 @@ export const PlaygroundPage: React.FC<PlaygroundPageProps> = ({
 
         {/* Output Section */}
         <div style={{ 
-          height: '300px',
+          height: '200px',
           marginBottom: '1rem',
           border: '1px solid #d0d0d0',
           borderRadius: '6px',
@@ -546,7 +546,7 @@ export const PlaygroundPage: React.FC<PlaygroundPageProps> = ({
 
         {/* Variables Section */}
         <div style={{ marginBottom: 'var(--pf-global--spacer--lg)' }}>
-          <Title headingLevel="h3" size="md" style={{ marginBottom: 'var(--pf-global--spacer--md)', color: '#333333' }}>
+          <Title headingLevel="h3" size="md" style={{ marginTop: 'var(--grimoire-font-size-xs, 8px)', marginBottom: 'var(--pf-global--spacer--md)', color: '#333333' }}>
             Variables
           </Title>
           <div>

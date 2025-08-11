@@ -203,13 +203,14 @@ export const PromptExperimentView: React.FC<PromptExperimentViewProps> = ({
           {/* Project Management Controls */}
           <div style={{ 
             display: 'flex',
-            gap: 'var(--pf-global--spacer--sm)'
+            gap: 'var(--grimoire-font-size-xs, 8px)',
+            alignItems: 'center'
           }}>
             <Button variant="secondary" size="sm" onClick={() => setIsEditModalOpen(true)}>
               Edit Project
             </Button>
-            <Button variant="danger" size="sm" onClick={() => setIsDeleteModalOpen(true)}>
-              Delete
+            <Button variant="secondary" size="sm" onClick={() => setIsDeleteModalOpen(true)}>
+              Settings
             </Button>
             <Button variant="tertiary" size="sm" onClick={() => setIsApiDocModalOpen(true)}>
               API Docs
