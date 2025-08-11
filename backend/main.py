@@ -268,9 +268,12 @@ async def get_prompt_history(project_id: int, request: Request, db: Session = De
                 if not recent_access:
                     token = user['access_token']
                     
-                    # NOTE: Removed duplicate prod/test cards creation logic
-                    # The System Status section in the frontend now handles 
-                    # displaying current prod/test status more elegantly
+                    # Sync with Git to ensure we have the latest commits
+                    try:
+                        await sync_git_commits_for_project(project_id, db, user)
+                        print(f"✅ Synced Git commits for project {project_id}")
+                    except Exception as sync_error:
+                        print(f"⚠️ Git sync failed: {sync_error}")
                     
             except Exception as e:
                 print(f"Failed to decrypt token or access git: {e}")
@@ -280,6 +283,53 @@ async def get_prompt_history(project_id: int, request: Request, db: Session = De
     history = db.query(PromptHistory).filter(
         PromptHistory.project_id == project_id
     ).order_by(PromptHistory.created_at.desc()).all()
+    
+    # Also get Git commit history if project has git repo
+    git_entries = []
+    if project.git_repo_url:
+        try:
+            cached_commits = db.query(GitCommitCache).filter(
+                GitCommitCache.project_id == project_id
+            ).order_by(GitCommitCache.commit_date.desc()).limit(10).all()
+            
+            for cached_commit in cached_commits:
+                try:
+                    prompt_data = json.loads(cached_commit.prompt_data)
+                    file_type = prompt_data.get('file_type', 'prod')  # Default to prod for backward compatibility
+                    is_prod_entry = file_type == 'prod'
+                    
+                    # Create appropriate commit message based on type
+                    if is_prod_entry:
+                        commit_icon = "🚀"
+                        commit_type = "Production"
+                    else:
+                        commit_icon = "🧪" 
+                        commit_type = "Test"
+                    
+                    # Create a pseudo-history entry for Git commits
+                    git_entry = PromptHistoryResponse(
+                        id=hash(cached_commit.commit_sha) % 2147483647,  # Convert SHA to int ID
+                        project_id=project_id,
+                        user_prompt=prompt_data.get('user_prompt', ''),
+                        system_prompt=prompt_data.get('system_prompt', ''),
+                        variables=prompt_data.get('variables'),
+                        temperature=prompt_data.get('temperature', 0.7),
+                        max_len=prompt_data.get('max_len', 1000),
+                        top_p=prompt_data.get('top_p', 1.0),
+                        top_k=prompt_data.get('top_k', 50),
+                        response=f"{commit_icon} {commit_type} commit: {cached_commit.commit_message}",
+                        backend_response=None,
+                        rating=None,
+                        notes=f"Git Author: {cached_commit.author}",
+                        is_prod=is_prod_entry,
+                        has_merged_pr=is_prod_entry,  # Only prod entries represent PRs
+                        created_at=cached_commit.commit_date
+                    )
+                    git_entries.append(git_entry)
+                except Exception as parse_error:
+                    print(f"Failed to parse Git commit data: {parse_error}")
+        except Exception as git_error:
+            print(f"Failed to fetch Git entries: {git_error}")
     
     # Parse variables JSON and check for merged PRs
     for item in history:
@@ -316,7 +366,13 @@ async def get_prompt_history(project_id: int, request: Request, db: Session = De
         )
         result.append(response_item)
     
-    return result
+    # Merge Git entries with regular history
+    all_entries = result + git_entries
+    
+    # Sort all entries by creation date (newest first)
+    all_entries.sort(key=lambda x: x.created_at, reverse=True)
+    
+    return all_entries
 
 @app.post("/api/projects/{project_id}/history", response_model=PromptHistoryResponse, tags=["History"])
 async def save_prompt_history(
@@ -1539,6 +1595,13 @@ async def tag_prompt_as_prod(
         db.add(pending_pr)
         db.commit()
         
+        # Sync Git commits to update history immediately (for when PR gets merged)
+        try:
+            await sync_git_commits_for_project(project_id, db, user_creds)
+            print(f"✅ Git sync completed after prod tag")
+        except Exception as sync_error:
+            print(f"⚠️ Git sync failed after prod tag: {sync_error}")
+        
         return {
             "message": "Pull request created successfully",
             "pr_url": pr_result['pr_url'],
@@ -1857,6 +1920,13 @@ async def tag_prompt_as_test(
         history_item.is_prod = True
         db.commit()
         
+        # Sync Git commits to update history immediately
+        try:
+            await sync_git_commits_for_project(project_id, db, user_creds)
+            print(f"✅ Git sync completed after test tag")
+        except Exception as sync_error:
+            print(f"⚠️ Git sync failed after test tag: {sync_error}")
+        
         return {
             "message": "Test settings saved to git successfully",
             "commit_sha": result.get('commit_sha'),
@@ -2105,39 +2175,51 @@ async def sync_git_commits_for_project(project_id: int, db: Session, user_creds:
             # Instead of raising error, just return empty - user needs to re-authenticate
             return
             
-        file_path = f"{project.name}/{project.provider_id}/prompt_prod.json"
+        # Sync both prod and test files
+        file_types = [
+            ("prod", f"{project.name}/{project.provider_id}/prompt_prod.json"),
+            ("test", f"{project.name}/{project.provider_id}/prompt_test.json")
+        ]
         
-        print(f"   Looking for file: {file_path}")
+        all_commits = []
         
-        # Get latest commits from git
-        print(f"🔍 Calling get_file_commit_history...")
-        try:
-            commits = git_service.get_file_commit_history(
-                user_creds['platform'],
-                token,
-                project.git_repo_url,
-                file_path,
-                limit=50  # Get more commits to ensure we catch everything
-            )
-            print(f"🔍 Got {len(commits)} commits from git")
-        except Exception as git_error:
-            print(f"❌ Error in get_file_commit_history: {git_error}")
-            import traceback
-            traceback.print_exc()
-            raise git_error
+        for file_type, file_path in file_types:
+            print(f"   Looking for {file_type} file: {file_path}")
+            
+            # Get latest commits from git for this file
+            print(f"🔍 Calling get_file_commit_history for {file_type}...")
+            try:
+                commits = git_service.get_file_commit_history(
+                    user_creds['platform'],
+                    token,
+                    project.git_repo_url,
+                    file_path,
+                    limit=25  # Get commits for each file type
+                )
+                print(f"🔍 Got {len(commits)} {file_type} commits from git")
+                
+                # Add file type information to each commit
+                for commit in commits:
+                    commit['file_type'] = file_type
+                    commit['file_path'] = file_path
+                    
+                all_commits.extend(commits)
+            except Exception as git_error:
+                print(f"❌ Error in get_file_commit_history for {file_type}: {git_error}")
+                # Continue with other file types even if one fails
+                continue
         
         # Get existing commit SHAs from database
-        existing_shas = set()
         existing_commits = db.query(GitCommitCache).filter(
             GitCommitCache.project_id == project_id
         ).all()
         existing_shas = {commit.commit_sha for commit in existing_commits}
         
-        print(f"Project {project_id}: Found {len(commits)} git commits, {len(existing_shas)} already cached")
+        print(f"Project {project_id}: Found {len(all_commits)} total git commits, {len(existing_shas)} already cached")
         
         # Process only new commits
         new_commits_count = 0
-        for commit in commits:
+        for commit in all_commits:
             if commit['sha'] not in existing_shas:
                 # This is a new commit, fetch its content and cache it
                 try:
@@ -2145,7 +2227,7 @@ async def sync_git_commits_for_project(project_id: int, db: Session, user_creds:
                         user_creds['platform'],
                         token,
                         project.git_repo_url,
-                        file_path,
+                        commit['file_path'],  # Use file path from commit
                         commit['sha']
                     )
                     
@@ -2166,7 +2248,8 @@ async def sync_git_commits_for_project(project_id: int, db: Session, user_creds:
                                 'max_len': prompt_data.max_len,
                                 'top_p': prompt_data.top_p,
                                 'top_k': prompt_data.top_k,
-                                'created_at': prompt_data.created_at
+                                'created_at': prompt_data.created_at,
+                                'file_type': commit['file_type']  # Add whether this is 'prod' or 'test'
                             })
                         )
                         db.add(cached_commit)

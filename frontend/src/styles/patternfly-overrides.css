@@ -75,3 +75,115 @@
   --pf-c-card--BackgroundColor: var(--pf-global--BackgroundColor--100);
   --pf-c-card--BoxShadow: var(--pf-global--BoxShadow--sm);
 }
+
+/* Modern PatternFly v6 design tokens for refined typography (ODH Dashboard approach) */
+body {
+  /* Use PatternFly v6 design tokens for better typography */
+  font-size: var(--pf-t--global--font--size--body--sm, 14px) !important;
+  font-weight: var(--pf-t--global--font--weight--body--default, 400) !important;
+  font-family: var(--pf-t--global--font--family--body, "RedHatText", "Overpass", overpass, helvetica, arial, sans-serif) !important;
+  line-height: var(--pf-t--global--line-height--body, 1.5) !important;
+  color: var(--pf-t--global--text--color--regular, #151515) !important;
+}
+
+/* Override PatternFly's default font sizes using v6 design tokens */
+.pf-c-title, .pf-v6-c-title {
+  --pf-c-title--m-4xl--FontSize: var(--pf-t--global--font--size--heading--xl);
+  --pf-c-title--m-3xl--FontSize: var(--pf-t--global--font--size--heading--lg);
+  --pf-c-title--m-2xl--FontSize: var(--pf-t--global--font--size--heading--md);
+  --pf-c-title--m-xl--FontSize: var(--pf-t--global--font--size--heading--sm);
+  --pf-c-title--m-lg--FontSize: var(--pf-t--global--font--size--body--lg);
+  font-weight: var(--pf-t--global--font--weight--heading--default, 600) !important;
+}
+
+/* Make buttons more compact using v6 tokens */
+.pf-c-button, .pf-v6-c-button {
+  font-size: var(--pf-t--global--font--size--body--sm, 14px) !important;
+  padding: var(--pf-t--global--spacer--xs, 4px) var(--pf-t--global--spacer--sm, 8px) !important;
+  font-weight: var(--pf-t--global--font--weight--body--default, 400) !important;
+}
+
+/* Make form controls more compact using v6 tokens */
+.pf-c-form-control, .pf-v6-c-form-control {
+  font-size: var(--pf-t--global--font--size--body--sm, 14px) !important;
+}
+
+/* Make form labels refined using v6 tokens */
+.pf-c-form__label, .pf-v6-c-form__label {
+  font-size: var(--pf-t--global--font--size--body--sm, 14px) !important;
+  font-weight: var(--pf-t--global--font--weight--body--default, 400) !important;
+  color: var(--pf-t--global--text--color--regular, #151515) !important;
+}
+
+/* Make tables more compact using v6 tokens */
+.pf-c-table, .pf-v6-c-table {
+  font-size: var(--pf-t--global--font--size--body--sm, 14px) !important;
+}
+
+/* Make cards more compact using v6 tokens */
+.pf-c-card__body, .pf-v6-c-card__body {
+  font-size: var(--pf-t--global--font--size--body--sm, 14px) !important;
+}
+
+/* Adjust modal content using v6 tokens */
+.pf-c-modal-box__body, .pf-v6-c-modal-box__body {
+  font-size: var(--pf-t--global--font--size--body--sm, 14px) !important;
+}
+
+/* Refined typography for parameter sections using PatternFly v6 design tokens */
+.pf-c-title.pf-m-md,
+h3.pf-c-title.pf-m-md,
+.pf-v6-c-title.pf-m-md,
+h3.pf-v6-c-title.pf-m-md {
+  font-size: var(--pf-t--global--font--size--body--lg, 16px) !important;
+  font-weight: var(--pf-t--global--font--weight--heading--default, 500) !important;
+  color: var(--pf-t--global--text--color--regular, #151515) !important;
+  margin-bottom: var(--pf-t--global--spacer--sm, 8px) !important;
+  letter-spacing: 0.01em !important;
+}
+
+/* Refined help text and descriptions using PatternFly v6 design tokens */
+.odh-form-section__desc,
+div[style*="color: #666"],
+[style*="fontSize: 'var(--pf-global--FontSize--sm)')"] {
+  font-size: var(--pf-t--global--font--size--body--sm, 14px) !important;
+  color: var(--pf-t--global--text--color--subtle, #6a6e73) !important;
+  font-weight: var(--pf-t--global--font--weight--body--default, 400) !important;
+  line-height: var(--pf-t--global--line-height--body, 1.5) !important;
+  font-family: var(--pf-t--global--font--family--body, "RedHatText", "Overpass", overpass, helvetica, arial, sans-serif) !important;
+}
+
+/* Form label refinements using PatternFly v6 design tokens */
+.pf-c-form__label-text, .pf-v6-c-form__label-text {
+  font-size: var(--pf-t--global--font--size--body--sm, 14px) !important;
+  font-weight: var(--pf-t--global--font--weight--body--default, 500) !important;
+  color: var(--pf-t--global--text--color--regular, #151515) !important;
+}
+
+/* Input placeholder refinements using PatternFly v6 design tokens */
+.pf-c-form-control::placeholder, 
+.pf-v6-c-form-control::placeholder {
+  font-size: var(--pf-t--global--font--size--body--sm, 14px) !important;
+  color: var(--pf-t--global--text--color--placeholder, #8a8d90) !important;
+  font-weight: var(--pf-t--global--font--weight--body--default, 400) !important;
+}
+
+/* Clean, refined parameter section styling using PatternFly v6 approach */
+/* Target specific parameter section patterns */
+div[style*="marginBottom: var(--pf-global--spacer--lg)"] h3,
+div[style*="margin-bottom"] .pf-c-title {
+  font-size: var(--pf-t--global--font--size--body--lg, 16px) !important;
+  font-weight: var(--pf-t--global--font--weight--body--default, 500) !important;
+  color: var(--pf-t--global--text--color--regular, #151515) !important;
+  margin-bottom: var(--pf-t--global--spacer--sm, 8px) !important;
+}
+
+/* Clean help text styling for Variables section */
+div[style*="color: #666"][style*="fontSize: var(--pf-global--FontSize--sm)"],
+div[style*="color: #666"][style*="marginBottom: var(--pf-global--spacer--sm)"] {
+  font-size: var(--pf-t--global--font--size--body--sm, 14px) !important;
+  color: var(--pf-t--global--text--color--subtle, #6a6e73) !important;
+  font-weight: var(--pf-t--global--font--weight--body--default, 400) !important;
+  line-height: var(--pf-t--global--line-height--body, 1.5) !important;
+  font-family: var(--pf-t--global--font--family--body) !important;
+}

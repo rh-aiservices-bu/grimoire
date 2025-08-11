@@ -1121,11 +1121,10 @@ class GitService:
                     content = base64.b64decode(file_data['content']).decode()
                     prompt_json = json.loads(content)
                     
-                    # Ensure created_at is a string
-                    if 'created_at' in prompt_json and prompt_json['created_at'] is None:
-                        prompt_json['created_at'] = "2024-01-01T00:00:00"
+                    # Convert camelCase to snake_case for Pydantic model
+                    converted_json = self._convert_git_json_to_model_format(prompt_json)
                     
-                    return ProdPromptData(**prompt_json)
+                    return ProdPromptData(**converted_json)
                 else:
                     return None
             elif platform == 'gitlab':
@@ -1138,11 +1137,10 @@ class GitService:
                     content = base64.b64decode(file_data['content']).decode()
                     prompt_json = json.loads(content)
                     
-                    # Ensure created_at is a string
-                    if 'created_at' in prompt_json and prompt_json['created_at'] is None:
-                        prompt_json['created_at'] = "2024-01-01T00:00:00"
+                    # Convert camelCase to snake_case for Pydantic model
+                    converted_json = self._convert_git_json_to_model_format(prompt_json)
                     
-                    return ProdPromptData(**prompt_json)
+                    return ProdPromptData(**converted_json)
                 else:
                     print(f"Failed to get GitLab file content at commit: {response.text}")
                     return None
@@ -1157,11 +1155,10 @@ class GitService:
                     content = base64.b64decode(file_data['content']).decode()
                     prompt_json = json.loads(content)
                     
-                    # Ensure created_at is a string
-                    if 'created_at' in prompt_json and prompt_json['created_at'] is None:
-                        prompt_json['created_at'] = "2024-01-01T00:00:00"
+                    # Convert camelCase to snake_case for Pydantic model
+                    converted_json = self._convert_git_json_to_model_format(prompt_json)
                     
-                    return ProdPromptData(**prompt_json)
+                    return ProdPromptData(**converted_json)
                 else:
                     print(f"Failed to get Gitea file content at commit: {response.text}")
                     return None
@@ -1172,6 +1169,29 @@ class GitService:
         except Exception as e:
             print(f"Failed to get file content at commit: {e}")
             return None
+    
+    def _convert_git_json_to_model_format(self, prompt_json: dict) -> dict:
+        """Convert Git JSON format (camelCase) to Pydantic model format (snake_case)"""
+        field_mapping = {
+            'userPrompt': 'user_prompt',
+            'systemPrompt': 'system_prompt',
+            'maxLen': 'max_len',
+            'topP': 'top_p',
+            'topK': 'top_k',
+            'createdAt': 'created_at'
+        }
+        
+        converted = {}
+        for key, value in prompt_json.items():
+            # Use mapped field name if available, otherwise keep original
+            new_key = field_mapping.get(key, key)
+            converted[new_key] = value
+        
+        # Ensure created_at is a string and not None
+        if 'created_at' in converted and converted['created_at'] is None:
+            converted['created_at'] = "2024-01-01T00:00:00"
+            
+        return converted
     
     def get_test_settings_from_git(self, platform: str, token: str, repo_url: str, project_name: str, provider_id: str) -> Optional[Dict]:
         """Get test settings from git repository with commit timestamp"""
