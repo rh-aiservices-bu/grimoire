@@ -26,6 +26,7 @@ import {
   Tabs,
   Tab,
   TabTitleText,
+  ExpandableSection,
 } from '@patternfly/react-core';
 import { PlusIcon, ClockIcon, CopyIcon, EyeIcon } from '@patternfly/react-icons';
 import { Project, PromptHistory, ModelParameters } from '../../types';
@@ -92,6 +93,8 @@ export const PlaygroundPage: React.FC<PlaygroundPageProps> = ({
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
   const [requestPayload, setRequestPayload] = useState<any>(null);
   const [requestModalTab, setRequestModalTab] = useState<string | number>('json');
+  const [isParametersExpanded, setIsParametersExpanded] = useState(false);
+  const [isHistoryExpanded, setIsHistoryExpanded] = useState(true);
 
   // Convenience getters for state properties
   const { messages, variables, variableInput, modelParams, response, thoughtProcess, footerInput } = state;
@@ -449,176 +452,190 @@ export const PlaygroundPage: React.FC<PlaygroundPageProps> = ({
         border: '1px solid #d0d0d0',
         overflow: 'auto'
       }}>
-        {/* Parameters Section */}
+        {/* Model Parameters & Variables Section */}
         <div style={{ marginBottom: 'var(--pf-global--spacer--lg)' }}>
-          <Title headingLevel="h3" size="md" style={{ marginBottom: 'var(--pf-global--spacer--md)', color: '#333333' }}>
-            Parameters
-          </Title>
-          <Stack hasGutter>
-            <StackItem>
-              <FormGroup label="Temperature" fieldId="temperature">
-                <Tooltip content="Controls randomness. Higher = more creative.">
-                  <NumberInput
-                    value={modelParams.temperature}
-                    onMinus={() => updateState({ 
-                      modelParams: { ...modelParams, temperature: Math.max(0, modelParams.temperature - 0.1) }
-                    })}
-                    onPlus={() => updateState({ 
-                      modelParams: { ...modelParams, temperature: Math.min(2, modelParams.temperature + 0.1) }
-                    })}
-                    min={0}
-                    max={2}
-                    step={0.1}
-                    onChange={(event) => {
-                      const value = parseFloat((event.target as HTMLInputElement).value) || 0;
-                      updateState({ modelParams: { ...modelParams, temperature: value } });
+          <ExpandableSection
+            toggleText="Model Parameters"
+            isExpanded={isParametersExpanded}
+            onToggle={(_event: any, isExpanded: boolean) => {
+              console.log('ExpandableSection onToggle called:', isExpanded);
+              setIsParametersExpanded(isExpanded);
+            }}
+          >
+            <Stack hasGutter style={{ marginTop: 'var(--pf-global--spacer--md)' }}>
+              {/* Model Parameters */}
+              <StackItem>
+                <FormGroup label="Temperature" fieldId="temperature">
+                  <Tooltip content="Controls randomness. Higher = more creative.">
+                    <NumberInput
+                      value={modelParams.temperature}
+                      onMinus={() => updateState({ 
+                        modelParams: { ...modelParams, temperature: Math.max(0, modelParams.temperature - 0.1) }
+                      })}
+                      onPlus={() => updateState({ 
+                        modelParams: { ...modelParams, temperature: Math.min(2, modelParams.temperature + 0.1) }
+                      })}
+                      min={0}
+                      max={2}
+                      step={0.1}
+                      onChange={(event) => {
+                        const value = parseFloat((event.target as HTMLInputElement).value) || 0;
+                        updateState({ modelParams: { ...modelParams, temperature: value } });
+                      }}
+                    />
+                  </Tooltip>
+                </FormGroup>
+              </StackItem>
+              <StackItem>
+                <FormGroup label="Max Length" fieldId="max-length">
+                  <Tooltip content="Maximum number of tokens in output.">
+                    <NumberInput
+                      value={modelParams.max_len}
+                      onMinus={() => updateState({ 
+                        modelParams: { ...modelParams, max_len: Math.max(1, modelParams.max_len - 50) }
+                      })}
+                      onPlus={() => updateState({ 
+                        modelParams: { ...modelParams, max_len: Math.min(4096, modelParams.max_len + 50) }
+                      })}
+                      min={1}
+                      max={4096}
+                      onChange={(event) => {
+                        const value = parseInt((event.target as HTMLInputElement).value) || 1;
+                        updateState({ modelParams: { ...modelParams, max_len: value } });
+                      }}
+                    />
+                  </Tooltip>
+                </FormGroup>
+              </StackItem>
+              <StackItem>
+                <FormGroup label="Top-k" fieldId="top-k">
+                  <Tooltip content="Sample from top-k most likely tokens.">
+                    <NumberInput
+                      value={modelParams.top_k}
+                      onMinus={() => updateState({ 
+                        modelParams: { ...modelParams, top_k: Math.max(0, modelParams.top_k - 5) }
+                      })}
+                      onPlus={() => updateState({ 
+                        modelParams: { ...modelParams, top_k: Math.min(100, modelParams.top_k + 5) }
+                      })}
+                      min={0}
+                      max={100}
+                      onChange={(event) => {
+                        const value = parseInt((event.target as HTMLInputElement).value) || 0;
+                        updateState({ modelParams: { ...modelParams, top_k: value } });
+                      }}
+                    />
+                  </Tooltip>
+                </FormGroup>
+              </StackItem>
+              <StackItem>
+                <FormGroup label="Top-p" fieldId="top-p">
+                  <Tooltip content="Sample from top tokens whose cumulative prob ≥ p.">
+                    <NumberInput
+                      value={modelParams.top_p}
+                      onMinus={() => updateState({ 
+                        modelParams: { ...modelParams, top_p: Math.max(0, modelParams.top_p - 0.01) }
+                      })}
+                      onPlus={() => updateState({ 
+                        modelParams: { ...modelParams, top_p: Math.min(1, modelParams.top_p + 0.01) }
+                      })}
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      onChange={(event) => {
+                        const value = parseFloat((event.target as HTMLInputElement).value) || 0;
+                        updateState({ modelParams: { ...modelParams, top_p: value } });
+                      }}
+                    />
+                  </Tooltip>
+                </FormGroup>
+              </StackItem>
+              
+              {/* Variables Section */}
+              <StackItem>
+                <Title headingLevel="h4" size="sm" style={{ marginTop: 'var(--pf-global--spacer--md)', marginBottom: 'var(--pf-global--spacer--sm)', color: '#333333' }}>
+                  Variables
+                </Title>
+                <div>
+                  <div style={{ color: '#666', fontSize: 'var(--pf-global--FontSize--sm)', marginBottom: 'var(--pf-global--spacer--sm)' }}>
+                    Use handlebars in your prompt to add a variable (&#123;&#123;exampleVariable&#125;&#125;).
+                  </div>
+                  <TextArea
+                    id="playground-variables"
+                    value={variableInput}
+                    onChange={(_event, value) => handleVariableInputChange(value)}
+                    rows={Object.keys(variables).length > 0 ? 4 : 3}
+                    placeholder="name: John Doe&#10;age: 30&#10;city: New York"
+                    style={{
+                      fontFamily: 'monospace',
+                      backgroundColor: '#f8f9fa',
+                      color: '#333333',
+                      border: '1px solid #d0d0d0'
                     }}
                   />
-                </Tooltip>
-              </FormGroup>
-            </StackItem>
-            <StackItem>
-              <FormGroup label="Max Length" fieldId="max-length">
-                <Tooltip content="Maximum number of tokens in output.">
-                  <NumberInput
-                    value={modelParams.max_len}
-                    onMinus={() => updateState({ 
-                      modelParams: { ...modelParams, max_len: Math.max(1, modelParams.max_len - 50) }
-                    })}
-                    onPlus={() => updateState({ 
-                      modelParams: { ...modelParams, max_len: Math.min(4096, modelParams.max_len + 50) }
-                    })}
-                    min={1}
-                    max={4096}
-                    onChange={(event) => {
-                      const value = parseInt((event.target as HTMLInputElement).value) || 1;
-                      updateState({ modelParams: { ...modelParams, max_len: value } });
-                    }}
-                  />
-                </Tooltip>
-              </FormGroup>
-            </StackItem>
-            <StackItem>
-              <FormGroup label="Top-k" fieldId="top-k">
-                <Tooltip content="Sample from top-k most likely tokens.">
-                  <NumberInput
-                    value={modelParams.top_k}
-                    onMinus={() => updateState({ 
-                      modelParams: { ...modelParams, top_k: Math.max(0, modelParams.top_k - 5) }
-                    })}
-                    onPlus={() => updateState({ 
-                      modelParams: { ...modelParams, top_k: Math.min(100, modelParams.top_k + 5) }
-                    })}
-                    min={0}
-                    max={100}
-                    onChange={(event) => {
-                      const value = parseInt((event.target as HTMLInputElement).value) || 0;
-                      updateState({ modelParams: { ...modelParams, top_k: value } });
-                    }}
-                  />
-                </Tooltip>
-              </FormGroup>
-            </StackItem>
-            <StackItem>
-              <FormGroup label="Top-p" fieldId="top-p">
-                <Tooltip content="Sample from top tokens whose cumulative prob ≥ p.">
-                  <NumberInput
-                    value={modelParams.top_p}
-                    onMinus={() => updateState({ 
-                      modelParams: { ...modelParams, top_p: Math.max(0, modelParams.top_p - 0.01) }
-                    })}
-                    onPlus={() => updateState({ 
-                      modelParams: { ...modelParams, top_p: Math.min(1, modelParams.top_p + 0.01) }
-                    })}
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    onChange={(event) => {
-                      const value = parseFloat((event.target as HTMLInputElement).value) || 0;
-                      updateState({ modelParams: { ...modelParams, top_p: value } });
-                    }}
-                  />
-                </Tooltip>
-              </FormGroup>
-            </StackItem>
-          </Stack>
-        </div>
-
-        {/* Variables Section */}
-        <div style={{ marginBottom: 'var(--pf-global--spacer--lg)' }}>
-          <Title headingLevel="h3" size="md" style={{ marginTop: 'var(--grimoire-font-size-xs, 8px)', marginBottom: 'var(--pf-global--spacer--md)', color: '#333333' }}>
-            Variables
-          </Title>
-          <div>
-            <div style={{ color: '#666', fontSize: 'var(--pf-global--FontSize--sm)', marginBottom: 'var(--pf-global--spacer--sm)' }}>
-              Use handlebars in your prompt to add a variable (&#123;&#123;exampleVariable&#125;&#125;).
-            </div>
-            <TextArea
-              id="playground-variables"
-              value={variableInput}
-              onChange={(_event, value) => handleVariableInputChange(value)}
-              rows={Object.keys(variables).length > 0 ? 4 : 3}
-              placeholder="name: John Doe&#10;age: 30&#10;city: New York"
-              style={{
-                fontFamily: 'monospace',
-                backgroundColor: '#f8f9fa',
-                color: '#333333',
-                border: '1px solid #d0d0d0'
-              }}
-            />
-          </div>
+                </div>
+              </StackItem>
+            </Stack>
+          </ExpandableSection>
         </div>
 
         {/* History Log Section */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <Title headingLevel="h3" size="md" style={{ marginTop: '32px', marginBottom: 'var(--pf-global--spacer--md)', color: '#333333' }}>
-            History
-          </Title>
-          <div style={{ 
-            flex: 1,
-            overflow: 'auto',
-            backgroundColor: '#f8f9fa',
-            borderRadius: 'var(--pf-global--BorderRadius--sm)',
-            padding: 'var(--pf-global--spacer--sm)',
-            border: '1px solid #d0d0d0'
-          }}>
-            {history.length === 0 ? (
-              <EmptyState>
-                <EmptyStateBody>
-                  <div style={{ textAlign: 'center', color: '#666' }}>
-                    <ClockIcon size="lg" style={{ marginBottom: 'var(--pf-global--spacer--sm)' }} />
-                    <div>No past runs yet.</div>
-                  </div>
-                </EmptyStateBody>
-              </EmptyState>
-            ) : (
-              <Stack hasGutter>
-                {history.slice(0, 10).map((item, index) => (
-                  <StackItem key={item.id}>
-                    <Card variant="compact" style={{ 
-                      backgroundColor: '#ffffff',
-                      border: '1px solid #d0d0d0',
-                      cursor: 'pointer'
-                    }}>
-                      <CardBody style={{ padding: '16px' }}>
-                        <div style={{ fontSize: 'var(--pf-global--FontSize--xs)', color: '#666', marginBottom: 'var(--pf-global--spacer--xs)' }}>
-                          🕒 {new Date(item.created_at).toLocaleString()}
-                        </div>
-                        <div style={{ fontFamily: 'monospace', fontSize: 'var(--pf-global--FontSize--sm)', marginBottom: 'var(--pf-global--spacer--xs)' }}>
-                          <div>System: "{item.system_prompt ? item.system_prompt.substring(0, 60) + '...' : 'None'}"</div>
-                          <div>User: "{item.user_prompt.substring(0, 60) + '...'}"</div>
-                          <div>Output: "{item.response ? item.response.substring(0, 60) + '...' : 'None'}"</div>
-                        </div>
-                        <div style={{ fontSize: 'var(--pf-global--FontSize--xs)', color: '#666' }}>
-                          Params: T={item.temperature || 'N/A'} | Len={item.max_len || 'N/A'} | Top-k={item.top_k || 'N/A'} | Top-p={item.top_p || 'N/A'}
-                        </div>
-                      </CardBody>
-                    </Card>
-                  </StackItem>
-                ))}
-              </Stack>
-            )}
-          </div>
+        <div style={{ marginTop: 'var(--pf-global--spacer--lg)' }}>
+          <ExpandableSection
+            toggleText="History"
+            isExpanded={isHistoryExpanded}
+            onToggle={(_event: any, isExpanded: boolean) => {
+              console.log('History ExpandableSection onToggle called:', isExpanded);
+              setIsHistoryExpanded(isExpanded);
+            }}
+          >
+            <div style={{ 
+              maxHeight: isParametersExpanded ? '300px' : 'none',
+              overflow: isParametersExpanded ? 'auto' : 'visible',
+              backgroundColor: '#f8f9fa',
+              borderRadius: 'var(--pf-global--BorderRadius--sm)',
+              padding: 'var(--pf-global--spacer--sm)',
+              border: '1px solid #d0d0d0',
+              marginTop: 'var(--pf-global--spacer--md)'
+            }}>
+              {history.length === 0 ? (
+                <EmptyState>
+                  <EmptyStateBody>
+                    <div style={{ textAlign: 'center', color: '#666' }}>
+                      <ClockIcon size="lg" style={{ marginBottom: 'var(--pf-global--spacer--sm)' }} />
+                      <div>No past runs yet.</div>
+                    </div>
+                  </EmptyStateBody>
+                </EmptyState>
+              ) : (
+                <Stack hasGutter>
+                  {history.map((item, index) => (
+                    <StackItem key={item.id}>
+                      <Card variant="compact" style={{ 
+                        backgroundColor: '#ffffff',
+                        border: '1px solid #d0d0d0',
+                        cursor: 'pointer'
+                      }}>
+                        <CardBody style={{ padding: '12px' }}>
+                          <div style={{ fontSize: '0.75rem', color: '#666', marginBottom: '0.25rem' }}>
+                            🕒 {new Date(item.created_at).toLocaleString()}
+                          </div>
+                          <div style={{ fontFamily: 'monospace', fontSize: '0.8rem', marginBottom: '0.25rem' }}>
+                            <div>System: "{item.system_prompt ? item.system_prompt.substring(0, 40) + '...' : 'None'}"</div>
+                            <div>User: "{item.user_prompt.substring(0, 40) + '...'}"</div>
+                            <div>Output: "{item.response ? item.response.substring(0, 40) + '...' : 'None'}"</div>
+                          </div>
+                          <div style={{ fontSize: '0.7rem', color: '#666' }}>
+                            T={item.temperature || 'N/A'} | Len={item.max_len || 'N/A'} | Top-k={item.top_k || 'N/A'} | Top-p={item.top_p || 'N/A'}
+                          </div>
+                        </CardBody>
+                      </Card>
+                    </StackItem>
+                  ))}
+                </Stack>
+              )}
+            </div>
+          </ExpandableSection>
         </div>
       </div>
 

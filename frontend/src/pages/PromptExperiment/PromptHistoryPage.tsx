@@ -16,6 +16,7 @@ import {
   ModalHeader,
   ModalBody,
   ModalFooter,
+  ExpandableSection,
 } from '@patternfly/react-core';
 import { 
   ClockIcon, 
@@ -70,6 +71,7 @@ export const PromptHistoryPage: React.FC<PromptHistoryPageProps> = ({
   const [showTestConfirmModal, setShowTestConfirmModal] = useState(false);
   const [showProdConfirmModal, setShowProdConfirmModal] = useState(false);
   const [confirmationPrompt, setConfirmationPrompt] = useState<PromptHistory | null>(null);
+  const [isParametersExpanded, setIsParametersExpanded] = useState(false);
   
 
   useEffect(() => {
@@ -396,22 +398,22 @@ export const PromptHistoryPage: React.FC<PromptHistoryPageProps> = ({
   };
 
   return (
-    <div style={{ display: 'flex', gap: '1rem', height: 'calc(100vh - 140px)' }}>
+    <div style={{ display: 'flex', gap: 'var(--pf-t--global--spacer--md, 16px)', height: 'calc(100vh - 140px)' }}>
       {/* Left Panel - Prompt List */}
       <div style={{
-        width: '400px',
+        width: '360px',
         display: 'flex',
         flexDirection: 'column',
-        backgroundColor: '#ffffff',
-        border: '1px solid #d0d0d0',
-        borderRadius: '8px',
+        backgroundColor: 'var(--pf-t--global--background--color--primary, #ffffff)',
+        border: '1px solid var(--pf-t--global--border--color--default, #d0d0d0)',
+        borderRadius: 'var(--pf-t--global--border--radius--medium, 8px)',
         overflow: 'hidden'
       }}>
         {/* Header */}
         <div style={{
-          padding: '1rem',
-          borderBottom: '1px solid #d0d0d0',
-          backgroundColor: '#f8f9fa'
+          padding: 'var(--pf-t--global--spacer--md, 16px)',
+          borderBottom: '1px solid var(--pf-t--global--border--color--default, #d0d0d0)',
+          backgroundColor: 'var(--pf-t--global--background--color--secondary--default, #f8f9fa)'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
@@ -433,7 +435,7 @@ export const PromptHistoryPage: React.FC<PromptHistoryPageProps> = ({
         </div>
 
         {/* Prompt List */}
-        <div style={{ flex: 1, overflow: 'auto', padding: '1rem' }}>
+        <div style={{ flex: 1, overflow: 'auto', padding: 'var(--pf-t--global--spacer--sm, 12px)' }}>
           {isLoading ? (
             <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}>
               <Spinner size="md" />
@@ -585,18 +587,18 @@ export const PromptHistoryPage: React.FC<PromptHistoryPageProps> = ({
         flex: 1,
         display: 'flex',
         flexDirection: 'column',
-        backgroundColor: '#ffffff',
-        border: '1px solid #d0d0d0',
-        borderRadius: '8px',
+        backgroundColor: 'var(--pf-t--global--background--color--primary, #ffffff)',
+        border: '1px solid var(--pf-t--global--border--color--default, #d0d0d0)',
+        borderRadius: 'var(--pf-t--global--border--radius--medium, 8px)',
         overflow: 'hidden'
       }}>
         {selectedPrompt ? (
           <>
             {/* Header */}
             <div style={{
-              padding: '1rem',
-              borderBottom: '1px solid #d0d0d0',
-              backgroundColor: '#f8f9fa'
+              padding: 'var(--pf-t--global--spacer--md, 16px)',
+              borderBottom: '1px solid var(--pf-t--global--border--color--default, #d0d0d0)',
+              backgroundColor: 'var(--pf-t--global--background--color--secondary--default, #f8f9fa)'
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
@@ -653,49 +655,45 @@ export const PromptHistoryPage: React.FC<PromptHistoryPageProps> = ({
                 </div>
               </div>
               
-              {/* Promotion Actions */}
+              {/* Compact Promotion Actions */}
               {!promotionStatus.pendingPRs.some(pr => pr.prompt_history_id === selectedPrompt.id) && (
                 <div style={{ 
-                  padding: '0.75rem 1rem',
-                  backgroundColor: '#f8f9fa',
-                  borderBottom: '1px solid #d0d0d0'
+                  padding: 'var(--pf-t--global--spacer--sm, 8px) var(--pf-t--global--spacer--md, 16px)',
+                  backgroundColor: 'var(--pf-t--global--background--color--secondary--default, #f8f9fa)',
+                  borderBottom: '1px solid var(--pf-t--global--border--color--default, #d0d0d0)',
+                  display: 'flex',
+                  gap: 'var(--pf-t--global--spacer--xs, 4px)'
                 }}>
-                  <div style={{
-                    display: 'flex',
-                    gap: '0.5rem',
-                    alignItems: 'center'
-                  }}>
-                    {/* Show Promote to Test button only if this prompt is NOT in test and NOT in production */}
-                    {promotionStatus.currentTest?.id !== selectedPrompt.id && promotionStatus.currentProd?.id !== selectedPrompt.id && (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => {
-                          setConfirmationPrompt(selectedPrompt);
-                          setShowTestConfirmModal(true);
-                        }}
-                        isDisabled={isPromoting}
-                        style={{ minWidth: '120px' }}
-                      >
-                        {isPromoting ? <Spinner size="sm" /> : 'Promote to Test'}
-                      </Button>
-                    )}
-                    {/* Show Promote to Production button if prompt is in test */}
-                    {promotionStatus.currentTest?.id === selectedPrompt.id && (
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={() => {
-                          setConfirmationPrompt(selectedPrompt);
-                          setShowProdConfirmModal(true);
-                        }}
-                        isDisabled={isPromoting}
-                        style={{ minWidth: '140px' }}
-                      >
-                        {isPromoting ? <Spinner size="sm" /> : 'Promote to Production'}
-                      </Button>
-                    )}
-                  </div>
+                  {/* Show Promote to Test button only if this prompt is NOT in test and NOT in production */}
+                  {promotionStatus.currentTest?.id !== selectedPrompt.id && promotionStatus.currentProd?.id !== selectedPrompt.id && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        setConfirmationPrompt(selectedPrompt);
+                        setShowTestConfirmModal(true);
+                      }}
+                      isDisabled={isPromoting}
+                      style={{ fontSize: 'var(--grimoire-font-size-sm)' }}
+                    >
+                      {isPromoting ? <Spinner size="sm" /> : 'Promote to Test'}
+                    </Button>
+                  )}
+                  {/* Show Promote to Production button if prompt is in test */}
+                  {promotionStatus.currentTest?.id === selectedPrompt.id && (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => {
+                        setConfirmationPrompt(selectedPrompt);
+                        setShowProdConfirmModal(true);
+                      }}
+                      isDisabled={isPromoting}
+                      style={{ fontSize: 'var(--grimoire-font-size-sm)' }}
+                    >
+                      {isPromoting ? <Spinner size="sm" /> : 'Promote to Production'}
+                    </Button>
+                  )}
                 </div>
               )}
               
@@ -1029,7 +1027,7 @@ export const PromptHistoryPage: React.FC<PromptHistoryPageProps> = ({
             </div>
 
             {/* Content */}
-            <div style={{ flex: 1, overflow: 'auto', padding: '1rem' }}>
+            <div style={{ flex: 1, overflow: 'auto', padding: 'var(--pf-t--global--spacer--sm, 12px)' }}>
               <Stack hasGutter>
                 {/* System Prompt */}
                 {selectedPrompt.system_prompt && (
@@ -1055,13 +1053,13 @@ export const PromptHistoryPage: React.FC<PromptHistoryPageProps> = ({
                           </Button>
                         </div>
                         <div style={{
-                          fontFamily: 'monospace',
-                          fontSize: '0.875rem',
-                          backgroundColor: '#f8f9fa',
-                          padding: '0.75rem',
-                          borderRadius: '4px',
+                          fontFamily: 'var(--pf-t--global--font--family--mono, monospace)',
+                          fontSize: 'var(--grimoire-font-size-sm)',
+                          backgroundColor: 'var(--pf-t--global--background--color--secondary--default, #f8f9fa)',
+                          padding: 'var(--pf-t--global--spacer--sm, 12px)',
+                          borderRadius: 'var(--pf-t--global--border--radius--small, 4px)',
                           whiteSpace: 'pre-wrap',
-                          lineHeight: '1.4'
+                          lineHeight: 'var(--pf-t--global--line-height--body, 1.5)'
                         }}>
                           {selectedPrompt.system_prompt}
                         </div>
@@ -1107,45 +1105,6 @@ export const PromptHistoryPage: React.FC<PromptHistoryPageProps> = ({
                   </Card>
                 </StackItem>
 
-                {/* Variables */}
-                {selectedPrompt.variables && Object.keys(selectedPrompt.variables).length > 0 && (
-                  <StackItem>
-                    <Card variant="compact">
-                      <CardBody>
-                        <div style={{ 
-                          display: 'flex', 
-                          justifyContent: 'space-between', 
-                          alignItems: 'center',
-                          marginBottom: '0.5rem'
-                        }}>
-                          <Title headingLevel="h4" size="sm" style={{ margin: 0 }}>
-                            Variables
-                          </Title>
-                          <Button
-                            variant="plain"
-                            icon={<CopyIcon />}
-                            onClick={() => copyToClipboard(JSON.stringify(selectedPrompt.variables, null, 2), 'Variables')}
-                            style={{ minWidth: 'auto', padding: '0.25rem' }}
-                          >
-                            Copy
-                          </Button>
-                        </div>
-                        <div style={{
-                          fontFamily: 'monospace',
-                          fontSize: '0.875rem',
-                          backgroundColor: '#f8f9fa',
-                          padding: '0.75rem',
-                          borderRadius: '4px',
-                          whiteSpace: 'pre-wrap',
-                          lineHeight: '1.4'
-                        }}>
-                          {JSON.stringify(selectedPrompt.variables, null, 2)}
-                        </div>
-                      </CardBody>
-                    </Card>
-                  </StackItem>
-                )}
-
                 {/* Response */}
                 {selectedPrompt.response && (
                   <StackItem>
@@ -1170,14 +1129,14 @@ export const PromptHistoryPage: React.FC<PromptHistoryPageProps> = ({
                           </Button>
                         </div>
                         <div style={{
-                          fontFamily: 'monospace',
-                          fontSize: '0.875rem',
-                          backgroundColor: '#f8f9fa',
-                          padding: '0.75rem',
-                          borderRadius: '4px',
+                          fontFamily: 'var(--pf-t--global--font--family--mono, monospace)',
+                          fontSize: 'var(--grimoire-font-size-sm)',
+                          backgroundColor: 'var(--pf-t--global--background--color--secondary--default, #f8f9fa)',
+                          padding: 'var(--pf-t--global--spacer--sm, 12px)',
+                          borderRadius: 'var(--pf-t--global--border--radius--small, 4px)',
                           whiteSpace: 'pre-wrap',
-                          lineHeight: '1.4',
-                          maxHeight: '300px',
+                          lineHeight: 'var(--pf-t--global--line-height--body, 1.5)',
+                          maxHeight: '200px',
                           overflow: 'auto'
                         }}>
                           {selectedPrompt.response}
@@ -1187,62 +1146,6 @@ export const PromptHistoryPage: React.FC<PromptHistoryPageProps> = ({
                   </StackItem>
                 )}
 
-                {/* Model Parameters */}
-                <StackItem>
-                  <Card variant="compact">
-                    <CardBody>
-                      <Title headingLevel="h4" size="sm" style={{ margin: 0, marginBottom: '0.75rem' }}>
-                        Model Parameters
-                      </Title>
-                      <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-                        gap: '0.75rem',
-                        fontSize: '0.875rem'
-                      }}>
-                        <div>
-                          <span style={{ fontWeight: 600 }}>Temperature: </span>
-                          <span>{selectedPrompt.temperature || 'N/A'}</span>
-                        </div>
-                        <div>
-                          <span style={{ fontWeight: 600 }}>Max Length: </span>
-                          <span>{selectedPrompt.max_len || 'N/A'}</span>
-                        </div>
-                        <div>
-                          <span style={{ fontWeight: 600 }}>Top-k: </span>
-                          <span>{selectedPrompt.top_k || 'N/A'}</span>
-                        </div>
-                        <div>
-                          <span style={{ fontWeight: 600 }}>Top-p: </span>
-                          <span>{selectedPrompt.top_p || 'N/A'}</span>
-                        </div>
-                      </div>
-                    </CardBody>
-                  </Card>
-                </StackItem>
-
-                {/* Notes */}
-                {selectedPrompt.notes && (
-                  <StackItem>
-                    <Card variant="compact">
-                      <CardBody>
-                        <Title headingLevel="h4" size="sm" style={{ margin: 0, marginBottom: '0.5rem' }}>
-                          Notes
-                        </Title>
-                        <div style={{
-                          fontSize: '0.875rem',
-                          backgroundColor: '#f8f9fa',
-                          padding: '0.75rem',
-                          borderRadius: '4px',
-                          whiteSpace: 'pre-wrap',
-                          lineHeight: '1.4'
-                        }}>
-                          {selectedPrompt.notes}
-                        </div>
-                      </CardBody>
-                    </Card>
-                  </StackItem>
-                )}
               </Stack>
             </div>
           </>
